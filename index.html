@@ -6,13 +6,13 @@
   <title>Step 1: 背景VR表示テスト</title>
   
   <!-- WebVR用ライブラリ（A-Frame）の読み込み -->
-  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <script src="https://aframe.io/releases/0.4.0/aframe.min.js"></script>
 </head>
 <body>
   <a-scene vr-mode-ui="enabled: true">
     
     <!-- 1. 全体を引き上げる環境光（強めにして影を薄くする） -->
-    <a-entity light="type: ambient; color: #FFFFFF; intensity: 1.2"></a-entity>
+    <a-entity light="type: ambient; color: #FFFFFF; intensity: 1.0"></a-entity>
 
     <!-- 2. 【★ここがポイント】部屋の中に置くライト（電球のように部屋の内側を照らす） -->
     <!-- position="0 2 0" は自分の立ち位置の頭上付近（高さ2m）に光を置く設定です -->
