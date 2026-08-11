@@ -2,28 +2,26 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <!-- スマホの画面サイズに最適化 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Step 1: 背景VR表示テスト</title>
   
-  <!-- 1. WebVR用ライブラリ（A-Frame）の読み込み -->
+  <!-- WebVR用ライブラリ（A-Frame）の読み込み -->
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
 </head>
 <body>
-  <!-- VR空間（シーン）の定義 -->
   <a-scene vr-mode-ui="enabled: true">
     
-    <!-- 2. ライト（照明）の設定：空間と背景をきれいに発色させるため -->
-    <!-- 全体を平均的に照らす光 -->
-    <a-entity light="type: ambient; color: #FFFFFF; intensity: 0.7"></a-entity>
-    <!-- 斜め上からの光（立体感を出す） -->
-    <a-entity light="type: directional; color: #FFFFFF; intensity: 0.5" position="-1 4 2"></a-entity>
+    <!-- 1. 全体を引き上げる環境光（強めにして影を薄くする） -->
+    <a-entity light="type: ambient; color: #FFFFFF; intensity: 1.2"></a-entity>
 
-    <!-- 3. 背景モデル（bg.glb）の呼び出し -->
-    <!-- 位置(position)や向き(rotation)は必要に応じて調整してください -->
+    <!-- 2. 【★ここがポイント】部屋の中に置くライト（電球のように部屋の内側を照らす） -->
+    <!-- position="0 2 0" は自分の立ち位置の頭上付近（高さ2m）に光を置く設定です -->
+    <a-entity light="type: point; color: #FFFFFF; intensity: 1.5; distance: 20" position="0 2 0"></a-entity>
+
+    <!-- 3. 背景モデル（bg.glb） -->
     <a-gltf-model src="bg.glb" position="0 0 0" rotation="0 0 0"></a-gltf-model>
 
-    <!-- 4. 空の色（背景モデルの外側の色） -->
+    <!-- 空の色 -->
     <a-sky color="#87CEEB"></a-sky>
 
   </a-scene>
