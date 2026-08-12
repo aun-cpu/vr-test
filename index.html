@@ -3,28 +3,32 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Step 1: 背景VR表示テスト</title>
+  <title>Step 2: 人型モデル追加テスト</title>
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
 </head>
 <body>
   <a-scene vr-mode-ui="enabled: true">
     
-    <!-- ★重要：視点（カメラ）の位置を調整 -->
+    <!-- ★重要：視点（カメラ）の位置を調整（元の設定を完全維持） -->
     <!-- position="0 1.6 2" は「高さ1.6m(目線)、手前2m」の位置に立つのを意味します -->
     <!-- もし画面が真っ暗や空しか見えない場合は z の数字(2) を 0 や -2 に書き換えて部屋の中に移動してください -->
     <a-entity id="rig" position="0 0.2 0">
       <a-camera look-controls camera="near: 0.1; far: 1000;"></a-camera>
     </a-entity>
 
-    <!-- 全体を平均的に照らす光 -->
+    <!-- 全体を平均的に照らす光（元の設定を完全維持） -->
     <a-entity light="type: ambient; color: #FFFFFF; intensity: 0.5"></a-entity>
-    <!-- 部屋の中を照らす光 -->
+    <!-- 部屋の中を照らす光（元の設定を完全維持） -->
     <a-entity light="type: point; color: #FFFFFF; intensity: 0.5; distance: 30" position="0 2 0"></a-entity>
 
-    <!-- 背景モデル（bg.glb） -->
+    <!-- 背景モデル（bg.glb）（元の設定を完全維持） -->
     <a-gltf-model src="bg.glb" position="0 0 0"></a-gltf-model>
 
-    <!-- 空の色 -->
+    <!-- ★【Step 2追加】人型モデル（正面奥に配置） -->
+    <!-- 見えない場合は position の最後の数字(-2) や scale(1 1 1) を調整してください -->
+    <a-gltf-model id="avatar" src="character_anim.glb" position="0 0 -2" scale="1 1 1"></a-gltf-model>
+
+    <!-- 空の色（元の設定を完全維持） -->
     <a-sky color="#000000"></a-sky>
 
   </a-scene>
