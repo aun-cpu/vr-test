@@ -6,7 +6,10 @@
   <title>Step 2: 人型モデル追加テスト</title>
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
 
-  <!-- ★【追加】GLTFモデルの透け・裏面消失バグをプログラムで強制解決する処理 -->
+  <!-- ★【追加】GLTFアニメーション（animation-mixer）を再生するためのライブラリ -->
+  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
+
+  <!-- ★【既存】GLTFモデルの透け・裏面消失バグをプログラムで強制解決する処理 -->
   <script>
     AFRAME.registerComponent('fix-material', {
       init: function () {
@@ -53,8 +56,15 @@
     <!-- 背景モデル（bg.glb） -->
     <a-gltf-model src="bg.glb" position="0 0 0"></a-gltf-model>
 
-    <!-- ★【変更点】人型モデルに fix-material を追加＆キャッシュクリア用の ?v=2 を付与 -->
-    <a-gltf-model id="avatar" src="character_anim.glb?v=2" position="0 0 -0.5" scale="1.1 1.1 1.1" fix-material></a-gltf-model>
+    <!-- ★【変更点】animation-mixer="clip: idle; loop: repeat" を追加し、idleモーションをループ再生 -->
+    <a-gltf-model 
+      id="avatar" 
+      src="character_anim.glb?v=2" 
+      position="0 0 -0.5" 
+      scale="1.1 1.1 1.1" 
+      fix-material
+      animation-mixer="clip: idle; loop: repeat">
+    </a-gltf-model>
 
     <!-- 空の色（元の設定を完全維持） -->
     <a-sky color="#000000"></a-sky>
