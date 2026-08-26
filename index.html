@@ -2,73 +2,126 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
+  <meta name="robots" content="noindex, nofollow">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Step 2: 人型モデル追加テスト</title>
-  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <title>MMD Direct Player</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #1a1a1a;
+    }
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
 
-  <!-- ★【追加】GLTFアニメーション（animation-mixer）を再生するためのライブラリ -->
-  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
-
-  <!-- ★【既存】GLTFモデルの透け・裏面消失バグをプログラムで強制解決する処理 -->
-  <script>
-    AFRAME.registerComponent('fix-material', {
-      init: function () {
-        this.el.addEventListener('model-loaded', () => {
-          const mesh = this.el.getObject3D('mesh');
-          if (!mesh) return;
-
-          mesh.traverse((node) => {
-            if (node.isMesh && node.material) {
-              const mat = node.material;
-
-              // 1. 裏面もすべて描画する（両面描画を強制）
-              mat.side = THREE.DoubleSide;
-
-              // 2. 透過バグ（裏透け・不自然な透過）を防ぐ
-              if (mat.transparent) {
-                mat.alphaTest = 0.5;      // 50%以下の透明度はくっきり切り抜く
-                mat.transparent = false;  // 半透明計算を無効化して不透明化
-                mat.depthWrite = true;   // 奥行き（Zバッファ）を正しく書き込む
-              }
-
-              mat.needsUpdate = true;
-            }
-          });
-          console.log("マテリアルの両面描画と透過バグを修正しました！");
-        });
-      }
-    });
-  </script>
+  <!-- Three.js および MMD関連ライブラリ（CDNから読み込み） -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/mmdparser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/MMDLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/animation/CCDIKSolver.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/animation/MMDPhysics.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/animation/MMDAnimationHelper.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
-  <a-scene vr-mode-ui="enabled: true">
-    
-    <!-- ★重要：視点（カメラ）の位置を調整（元の設定を完全維持） -->
-    <a-entity id="rig" position="0 0.03 -0.4">
-      <a-camera look-controls camera="near: 0.1; far: 1000;"></a-camera>
-    </a-entity>
 
-    <!-- 全体を平均的に照らす光（元の設定を完全維持） -->
-    <a-entity light="type: ambient; color: #FFFFFF; intensity: 0.5"></a-entity>
-    <!-- 部屋の中を照らす光（元の設定を完全維持） -->
-    <a-entity light="type: point; color: #FFFFFF; intensity: 0.5; distance: 30" position="0 2 0"></a-entity>
+  <div id="canvas-container"></div>
 
-    <!-- 背景モデル（bg.glb） -->
-    <a-gltf-model src="bg.glb" position="0 0 0"></a-gltf-model>
+  <script>
+    // --- 基本設定 ---
+    const PMX_FILE = 'model.pmx';   // MMDモデルのファイル名
+    const VMD_FILE = 'motion.vmd';  // モーションのファイル名
 
-    <!-- ★【変更点】animation-mixer="clip: idle; loop: repeat" を追加し、idleモーションをループ再生 -->
-    <a-gltf-model 
-      id="avatar" 
-      src="character_anim.glb?v=2" 
-      position="0 0 -0.5" 
-      scale="1.1 1.1 1.1" 
-      fix-material
-      animation-mixer="clip: idle; loop: repeat">
-    </a-gltf-model>
+    let scene, camera, renderer, helper, clock;
 
-    <!-- 空の色（元の設定を完全維持） -->
-    <a-sky color="#000000"></a-sky>
+    init();
 
-  </a-scene>
+    function init() {
+      const container = document.getElementById('canvas-container');
+      clock = new THREE.Clock();
+
+      // 1. シーン作成
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x1a1a1a);
+
+      // 2. カメラ設定
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 2000);
+      camera.position.set(0, 10, 30); // カメラの初期位置
+
+      // 3. ライト設定（モデルが綺麗に見える照明）
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambientLight);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      dirLight.position.set(10, 20, 10);
+      scene.add(dirLight);
+
+      // 4. レンダラー設定
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      container.appendChild(renderer.domElement);
+
+      // マウス操作（画面をドラッグして360度回転可能）
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.target.set(0, 10, 0);
+      controls.update();
+
+      // 5. MMDアニメーションヘルパー
+      helper = new THREE.MMDAnimationHelper();
+
+      // 6. PMX と VMD を直接読み込む
+      const loader = new THREE.MMDLoader();
+
+      loader.loadWithAnimation(
+        PMX_FILE,
+        VMD_FILE,
+        function (mmd) {
+          const mesh = mmd.mesh;
+          scene.add(mesh);
+
+          // アニメーションと物理演算（髪や服の揺れ）を追加
+          helper.add(mesh, {
+            animation: mmd.animation,
+            physics: true
+          });
+
+          // 描画ループ開始
+          animate();
+        },
+        function (xhr) {
+          // 読み込み進捗の表示
+          if (xhr.lengthComputable) {
+            const percentComplete = (xhr.loaded / xhr.total) * 100;
+            console.log(Math.round(percentComplete, 2) + '% loaded');
+          }
+        },
+        function (error) {
+          console.error('読み込みエラー:', error);
+        }
+      );
+
+      // 画面サイズ変更対応
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+      helper.update(delta); // モーションを進める
+      renderer.render(scene, camera);
+    }
+  </script>
+
 </body>
 </html>
