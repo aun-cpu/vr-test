@@ -7,26 +7,47 @@
     <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
     <!-- アニメーション再生用ライブラリ -->
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
+
+    <script>
+      // 重なりバグ（Depth）防止 ＋ マテリアル補正コンポーネント
+      AFRAME.registerComponent('fix-material', {
+        init: function () {
+          this.el.addEventListener('model-loaded', () => {
+            const mesh = this.el.getObject3D('mesh');
+            if (!mesh) return;
+
+            mesh.traverse((node) => {
+              if (node.isMesh && node.material) {
+                // 両面描画（裏抜け防止）
+                node.material.side = THREE.DoubleSide;
+                
+                // アルファカットアウト処理（重なり順バグ防止）
+                if (node.material.transparent) {
+                  node.material.alphaTest = 0.5;
+                  node.material.transparent = false;
+                  node.material.depthWrite = true;
+                }
+              }
+            });
+            console.log("マテリアルの補正が完了しました！");
+          });
+        }
+      });
+    </script>
   </head>
   <body>
 
     <a-scene>
       <a-assets>
-        <!-- キャッシュ対策で ?v=7 を付与 -->
-        <a-asset-item id="character" src="character_anim.glb?v=7"></a-asset-item>
+        <!-- キャッシュ対策で ?v=4 を付与 -->
+        <a-asset-item id="character" src="character_anim.glb?v=4"></a-asset-item>
       </a-assets>
 
-      <!-- カメラ設定タグ -->
-      <a-entity 
-        camera 
-        position="0 1.2 0" 
-        look-controls="pointerLockEnabled: false">
-      </a-entity>
-
-      <!-- Idle アニメーションを無限ループ再生 -->
+      <!-- Idle アニメーションを無限ループ (loop: repeat) 再生 -->
       <a-entity 
         id="character-model"
         gltf-model="#character" 
+        fix-material
         animation-mixer="clip: Idle; loop: repeat"
         position="0 0 -2.5"
         scale="1 1 1">
