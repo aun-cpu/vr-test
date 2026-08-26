@@ -38,6 +38,11 @@
 
     let scene, camera, renderer, helper, clock;
 
+    // ★【追加1】一部のテクスチャ（Toonやスフィア）が足りなくても無視して読み込む処理
+    THREE.DefaultLoadingManager.onError = function (url) {
+      console.warn('読み込めなかったファイル（無視して続行します）:', url);
+    };
+
     init();
 
     function init() {
@@ -50,7 +55,8 @@
 
       // 2. カメラ設定
       camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 2000);
-      camera.position.set(0, 10, 30); // カメラの初期位置
+      // ★【追加2】カメラ位置を(0, 10, 30)から(0, 10, 60)へ遠ざけ、全身が映るように変更
+      camera.position.set(0, 10, 60);
 
       // 3. ライト設定（モデルが綺麗に見える照明）
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -82,6 +88,14 @@
         VMD_FILE,
         function (mmd) {
           const mesh = mmd.mesh;
+
+          // ★【追加3】テクスチャの透過バグ・黒化を防止する処理
+          if (Array.isArray(mesh.material)) {
+            mesh.material.forEach(mat => {
+              mat.transparent = false;
+            });
+          }
+
           scene.add(mesh);
 
           // アニメーションと物理演算（髪や服の揺れ）を追加
