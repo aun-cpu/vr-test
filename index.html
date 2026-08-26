@@ -1,74 +1,42 @@
 <!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Step 2: 人型モデル追加テスト</title>
-  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+<html>
+  <head>
 
-  <!-- ★【追加】GLTFアニメーション（animation-mixer）を再生するためのライブラリ -->
-  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
+    <meta charset="utf-8">
+    <title>MMD Loop Animation</title>
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <!-- アニメーション再生用ライブラリ -->
+    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
+  </head>
+  <body>
 
-  <!-- ★【既存】GLTFモデルの透け・裏面消失バグをプログラムで強制解決する処理 -->
-  <script>
-    AFRAME.registerComponent('fix-material', {
-      init: function () {
-        this.el.addEventListener('model-loaded', () => {
-          const mesh = this.el.getObject3D('mesh');
-          if (!mesh) return;
+    <a-scene>
+      <a-assets>
+        <!-- キャッシュ対策で ?v=7 を付与 -->
+        <a-asset-item id="character" src="character_anim.glb?v=7"></a-asset-item>
+      </a-assets>
 
-          mesh.traverse((node) => {
-            if (node.isMesh && node.material) {
-              const mat = node.material;
+      <!-- カメラ設定タグ -->
+      <a-entity 
+        camera 
+        position="0 1.2 0" 
+        look-controls="pointerLockEnabled: false">
+      </a-entity>
 
-              // 1. 裏面もすべて描画する（両面描画を強制）
-              mat.side = THREE.DoubleSide;
+      <!-- Idle アニメーションを無限ループ再生 -->
+      <a-entity 
+        id="character-model"
+        gltf-model="#character" 
+        animation-mixer="clip: Idle; loop: repeat"
+        position="0 0 -2.5"
+        scale="1 1 1">
+      </a-entity>
 
-              // 2. 透過バグ（裏透け・不自然な透過）を防ぐ
-              if (mat.transparent) {
-                mat.alphaTest = 0.5;      // 50%以下の透明度はくっきり切り抜く
-                mat.transparent = false;  // 半透明計算を無効化して不透明化
-                mat.depthWrite = true;   // 奥行き（Zバッファ）を正しく書き込む
-              }
+      <!-- 背景・照明設定 -->
+      <a-sky color="#ECECEC"></a-sky>
+      <a-light type="ambient" intensity="0.8"></a-light>
+      <a-light type="directional" position="1 2 1" intensity="0.5"></a-light>
+    </a-scene>
 
-              mat.needsUpdate = true;
-            }
-          });
-          console.log("マテリアルの両面描画と透過バグを修正しました！");
-        });
-      }
-    });
-  </script>
-</head>
-<body>
-  <a-scene vr-mode-ui="enabled: true">
-    
-    <!-- ★重要：視点（カメラ）の位置を調整（元の設定を完全維持） -->
-    <a-entity id="rig" position="0 0.15 0">
-      <a-camera look-controls camera="near: 0.1; far: 1000;"></a-camera>
-    </a-entity>
-
-    <!-- 全体を平均的に照らす光（元の設定を完全維持） -->
-    <a-entity light="type: ambient; color: #FFFFFF; intensity: 0.5"></a-entity>
-    <!-- 部屋の中を照らす光（元の設定を完全維持） -->
-    <a-entity light="type: point; color: #FFFFFF; intensity: 0.5; distance: 30" position="0 2 0"></a-entity>
-
-    <!-- 背景モデル（bg.glb） -->
-    <a-gltf-model src="bg.glb" position="0 0 0"></a-gltf-model>
-
-    <!-- ★【変更点】animation-mixer="clip: idle; loop: repeat" を追加し、idleモーションをループ再生 -->
-    <a-gltf-model 
-      id="avatar" 
-      src="character_anim.glb?v=2" 
-      position="0 0 -0.5" 
-      scale="1.1 1.1 1.1" 
-      fix-material
-      animation-mixer="clip: idle; loop: repeat">
-    </a-gltf-model>
-
-    <!-- 空の色（元の設定を完全維持） -->
-    <a-sky color="#000000"></a-sky>
-
-  </a-scene>
-</body>
+  </body>
 </html>
