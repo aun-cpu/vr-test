@@ -33,10 +33,10 @@
       }
     });
 
-    // ★ 複数モーフの同時制御に対応した AnimationMixer コンポーネント
+    // ★ 複数モーフの同時制御 ＋ 変化量ランダム化コンポーネント
     AFRAME.registerComponent('tap-to-action', {
       schema: {
-        morphNames: { type: 'array', default: ['Blink'] } // ★配列で複数モーフ名を受け取る
+        morphNames: { type: 'array', default: ['Blink'] }
       },
 
       init: function () {
@@ -47,7 +47,7 @@
         let isActionPlaying = false;
         let morphTargets = [];
 
-        // ★ 指定された全モーフターゲットの値を同時にアニメーション変化させる関数
+        // 全モーフターゲットの値をアニメーション変化させる関数
         const animateMorphs = (fromVal, toVal, duration, callback) => {
           if (morphTargets.length === 0) {
             if (callback) callback();
@@ -60,7 +60,6 @@
             const progress = Math.min(elapsed / duration, 1);
             const currentVal = fromVal + (toVal - fromVal) * progress;
 
-            // 保持しているすべての対象モーフの重みを一括で更新
             morphTargets.forEach((target) => {
               target.mesh.morphTargetInfluences[target.index] = currentVal;
             });
@@ -74,7 +73,7 @@
           requestAnimationFrame(step);
         };
 
-        // モデルロード完了時に Three.js のミキサー・クリップ・モーフターゲットを準備
+        // モデルロード完了処理
         el.addEventListener('model-loaded', () => {
           const model = el.getObject3D('mesh');
           if (!model || !model.animations || model.animations.length === 0) return;
@@ -95,7 +94,7 @@
             actions['action'].clampWhenFinished = true;
           }
 
-          // ★ 指定された複数のモーフターゲットを全メッシュから一括検出
+          // 対象モーフの検出
           morphTargets = [];
           const targetsToSearch = this.data.morphNames.map(name => name.trim());
 
@@ -117,7 +116,6 @@
               isActionPlaying = false;
               console.log("action 終了: 位置とモーションを滑らかに戻します");
 
-              // 位置を 0.4 秒かけて滑らかに「0 0 -0.5」へ降下
               el.removeAttribute('animation__move');
               el.setAttribute('animation__move', {
                 property: 'position',
@@ -126,7 +124,6 @@
                 easing: 'easeInOutQuad'
               });
 
-              // action から idle へ 0.4 秒かけて滑らかにクロスフェード
               const actionClip = actions['action'];
               const idleClip = actions['idle'];
 
@@ -138,7 +135,7 @@
           });
         });
 
-        // 毎フレームミキサーを更新
+        // フレーム更新
         this.tick = function (t, dt) {
           if (mixer) mixer.update(dt / 1000);
         };
@@ -149,19 +146,21 @@
             isActionPlaying = true;
             console.log("action を即座に再生");
 
-            // タップ時は即座に上がった位置へ変更
             el.removeAttribute('animation__move');
             el.setAttribute('position', '0 0.02 -0.5');
 
-            // idle を停止し、即座に action を再生
             actions['idle'].stop();
             actions['action'].reset();
             actions['action'].play();
             activeAction = actions['action'];
 
-            // ★ 登録されたすべてのモーフを同時に「0.3秒で 0 -> 0.5」にし、続いて「0.2秒で 0.5 -> 0」へ戻す
-            animateMorphs(0, 0.5, 300, () => {
-              animateMorphs(0.5, 0, 200);
+            // ★ 変化量をランダムで 0.5 または 0.3 に決定
+            const targetIntensity = Math.random() < 0.5 ? 0.5 : 0.3;
+            console.log(`今回のモーフ変化量: ${targetIntensity}`);
+
+            // ★ 0 -> ランダム値 (0.3 or 0.5) へ 0.3秒で変化後、0.2秒で 0 へ復元
+            animateMorphs(0, targetIntensity, 300, () => {
+              animateMorphs(targetIntensity, 0, 200);
             });
           }
         });
@@ -181,7 +180,6 @@
 
     <a-gltf-model src="bg.glb" position="0 0 -0.3"></a-gltf-model>
 
-    <!-- ★ morphNames に動かしたい複数のシェイプキー名をカンマ区切りで指定 -->
     <a-gltf-model 
       id="avatar" 
       src="character_anim.glb?v=2" 
