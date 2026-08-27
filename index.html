@@ -5,8 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Step 2: 人型モデル追加テスト</title>
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+
+  <!-- ★【追加】GLTFアニメーション（animation-mixer）を再生するためのライブラリ -->
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
 
+  <!-- ★【既存】GLTFモデルの透け・裏面消失バグをプログラムで強制解決する処理 -->
   <script>
     AFRAME.registerComponent('fix-material', {
       init: function () {
@@ -17,12 +20,15 @@
           mesh.traverse((node) => {
             if (node.isMesh && node.material) {
               const mat = node.material;
+
+              // 1. 裏面もすべて描画する（両面描画を強制）
               mat.side = THREE.DoubleSide;
 
+              // 2. 透過バグ（裏透け・不自然な透過）を防ぐ
               if (mat.transparent) {
-                mat.alphaTest = 0.5;
-                mat.transparent = false;
-                mat.depthWrite = true;
+                mat.alphaTest = 0.5;      // 50%以下の透明度はくっきり切り抜く
+                mat.transparent = false;  // 半透明計算を無効化して不透明化
+                mat.depthWrite = true;   // 奥行き（Zバッファ）を正しく書き込む
               }
 
               mat.needsUpdate = true;
@@ -33,62 +39,44 @@
       }
     });
 
-    // ★ 修正版 tap-to-action
+    // ★【更新】画面タップでモーション切り替え ＋ Y軸位置を0.2上に調整
     AFRAME.registerComponent('tap-to-action', {
       init: function () {
         const el = this.el;
         let isActionPlaying = false;
 
+        // 画面全体（ウィンドウ）がタップ・クリックされた時の処理
         window.addEventListener('click', () => {
           if (!isActionPlaying) {
             isActionPlaying = true;
-            console.log("action を再生します");
-
-            // 1. 位置を即座に更新
-            el.removeAttribute('animation__move');
+            console.log("action を再生します（Y位置を+0.2調整）");
+            
+            // Y座標を +0.2 移動 (0 0 -0.5 -> 0 0.02 -0.5)
             el.setAttribute('position', '0 0.02 -0.5');
 
-            // 2. ミキサーを一旦破棄して再セット（属性変更の無視とミキサー破綻を防ぐ）
-            el.removeAttribute('animation-mixer');
-            
-            // 1フレーム遅らせて確実にコンポーネントを再生成
-            setTimeout(() => {
-              el.setAttribute('animation-mixer', {
-                clip: 'action',
-                loop: 'once',
-                clampWhenFinished: true,
-                crossFadeDuration: 0
-              });
-            }, 0);
+            // 1回だけ再生 (loop: once)
+            el.setAttribute('animation-mixer', {
+              clip: 'action',
+              loop: 'once',
+              clampWhenFinished: true
+            });
           }
         });
 
-        // モーション再生終了時
-        el.addEventListener('animation-finished', (e) => {
-          // action 終了時のみ処理（他のアニメーションイベントとの混同を防止）
+        // モーション再生が終了した時のイベント検知
+        el.addEventListener('animation-finished', () => {
           if (isActionPlaying) {
-            console.log("action 完了: idle に戻します");
+            isActionPlaying = false;
+            console.log("action が終了したため idle に戻します");
+            
+            // Y座標を元の位置に戻す
+            el.setAttribute('position', '0 0 -0.5');
 
-            // 1. 位置を元に戻す
-            el.setAttribute('animation__move', {
-              property: 'position',
-              to: '0 0 -0.5',
-              dur: 500,
-              easing: 'easeInOutQuad'
+            // 完了したら idle ループに戻す
+            el.setAttribute('animation-mixer', {
+              clip: 'idle',
+              loop: 'repeat'
             });
-
-            // 2. 一度破棄してから idle を再セット
-            el.removeAttribute('animation-mixer');
-            setTimeout(() => {
-              el.setAttribute('animation-mixer', {
-                clip: 'idle',
-                loop: 'repeat',
-                crossFadeDuration: 0.4
-              });
-              
-              // idle 再生が再開されたらフラグを下ろす
-              isActionPlaying = false;
-            }, 0);
           }
         });
       }
@@ -98,15 +86,20 @@
 <body>
   <a-scene vr-mode-ui="enabled: true">
     
+    <!-- ★重要：視点（カメラ）の位置を調整（元の設定を完全維持） -->
     <a-entity id="rig" position="0 0.1 -0.4">
       <a-camera look-controls camera="near: 0.01; far: 1000;"></a-camera>
     </a-entity>
 
+    <!-- 全体を平均的に照らす光（元の設定を完全維持） -->
     <a-entity light="type: ambient; color: #FFFFFF; intensity: 0.5"></a-entity>
+    <!-- 部屋の中を照らす光（元の設定を完全維持） -->
     <a-entity light="type: point; color: #FFFFFF; intensity: 0.5; distance: 30" position="0 2 0"></a-entity>
 
+    <!-- 背景モデル（bg.glb） -->
     <a-gltf-model src="bg.glb" position="0 0 -0.3"></a-gltf-model>
 
+    <!-- ★ tap-to-action を適用 -->
     <a-gltf-model 
       id="avatar" 
       src="character_anim.glb?v=2" 
@@ -117,6 +110,7 @@
       animation-mixer="clip: idle; loop: repeat">
     </a-gltf-model>
 
+    <!-- 空の色（元の設定を完全維持） -->
     <a-sky color="#000000"></a-sky>
 
   </a-scene>
