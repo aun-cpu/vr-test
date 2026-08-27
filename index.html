@@ -122,6 +122,11 @@
         const SOUND5_BASE_VOLUME = 0.3;
         const SOUND5_BOOST_VOLUME = 1.0;
 
+        // sound7 / sound8 / sound9 用の変数（追加）
+        let sound7Buffer = null;
+        let sound8Buffer = null;
+        let sound9Buffer = null;
+
         // 擬似的なリバーブ（反響）効果を作成する関数
         const createReverbNode = (ctx) => {
           const sampleRate = ctx.sampleRate;
@@ -183,6 +188,42 @@
           }
         };
 
+        // 事前読み込み済みバッファーを再生する関数（追加）
+        const playBufferSound = (buffer, speed = 1.0, volumeBoost = 2.0) => {
+          if (!buffer) return;
+          try {
+            initAudioContext();
+
+            const source = audioCtx.createBufferSource();
+            const gainNode = audioCtx.createGain();
+
+            source.buffer = buffer;
+            source.playbackRate.value = speed;
+            gainNode.gain.value = volumeBoost;
+
+            source.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            const reverbGain = audioCtx.createGain();
+            reverbGain.gain.value = 0.3;
+            gainNode.connect(reverbGain);
+            reverbGain.connect(reverbNode);
+
+            source.start(0);
+          } catch (err) {
+            console.log("バッファー音声再生エラー:", err);
+          }
+        };
+
+        // アイドル時のランダム音声再生関数（sound7, sound8, sound9 の中からランダム再生）（追加）
+        const playRandomIdleSound = () => {
+          const idleBuffers = [sound7Buffer, sound8Buffer, sound9Buffer].filter(b => b !== null);
+          if (idleBuffers.length === 0) return;
+
+          const chosenBuffer = idleBuffers[Math.floor(Math.random() * idleBuffers.length)];
+          playBufferSound(chosenBuffer, 1.0, 2.0);
+        };
+
         // 各種音声データの事前読み込み
         const initAudioBuffers = async () => {
           try {
@@ -205,6 +246,25 @@
               .then(buf => audioCtx.decodeAudioData(buf))
               .then(decoded => { sound6Buffer = decoded; })
               .catch(err => console.log("sound6.mp3 読み込み失敗:", err));
+
+            // sound7, sound8, sound9 の事前読み込み（追加）
+            fetch('sound7.mp3')
+              .then(res => res.arrayBuffer())
+              .then(buf => audioCtx.decodeAudioData(buf))
+              .then(decoded => { sound7Buffer = decoded; })
+              .catch(err => console.log("sound7.mp3 読み込み失敗:", err));
+
+            fetch('sound8.mp3')
+              .then(res => res.arrayBuffer())
+              .then(buf => audioCtx.decodeAudioData(buf))
+              .then(decoded => { sound8Buffer = decoded; })
+              .catch(err => console.log("sound8.mp3 読み込み失敗:", err));
+
+            fetch('sound9.mp3')
+              .then(res => res.arrayBuffer())
+              .then(buf => audioCtx.decodeAudioData(buf))
+              .then(decoded => { sound9Buffer = decoded; })
+              .catch(err => console.log("sound9.mp3 読み込み失敗:", err));
 
           } catch (err) {
             console.log("オーディオ初期化エラー:", err);
@@ -417,6 +477,8 @@
             if (!isActionPlaying) {
               const targetQuat = getEyesLookAtCameraQuat(30);
               rotateEyesTo(targetQuat, 300, () => {
+                // アイドルモーフ再生開始時に sound7/sound8/sound9 をランダム再生
+                playRandomIdleSound();
                 repeatMorphs(0, 5, () => {
                   rotateEyesTo(eyesBaseQuat, 300, () => {
                     scheduleNextIdleMorph();
