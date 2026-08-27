@@ -125,25 +125,25 @@
           }, randomDelay);
         };
 
-        // ★ action 再生中の頭ボーン回転スケジュール関数
+        // ★ action 再生中の頭ボーン回転スケジュール関数（回転角度を大きく設定）
         const scheduleNextActionHeadRotation = () => {
           clearTimeout(actionHeadTimer);
           if (!isActionPlaying || !headBone) return;
 
-          // 5秒〜10秒（5000ms + ランダムで最高5000ms）の間隔
+          // 5秒〜10秒の間隔
           const randomDelay = 5000 + Math.random() * 5000;
 
           actionHeadTimer = setTimeout(() => {
             if (isActionPlaying && headBone) {
-              console.log("action中の頭ボーンランダム回転実行");
+              console.log("action中の頭ボーン大回転実行");
 
-              // 上方向以外のランダムな回転角度（ラジアン）を設定
-              // X軸（下方向へ 0〜5度）
-              const pitchDeg = Math.random() * 20; 
-              // Y軸（左右へ -5〜5度）
-              const yawDeg = (Math.random() - 0.5) * 90; 
-              // Z軸（傾き -5〜5度）
-              const rollDeg = (Math.random() - 0.5) * 10; 
+              // ★ 角度の振れ幅を大幅に拡大
+              // X軸（下方向へ 5〜15度）
+              const pitchDeg = 5 + Math.random() * 10; 
+              // Y軸（左右へ -20〜20度）
+              const yawDeg = (Math.random() - 0.5) * 40; 
+              // Z軸（首をかしげる方向へ -15〜15度）
+              const rollDeg = (Math.random() - 0.5) * 30; 
 
               const pitch = THREE.MathUtils.degToRad(pitchDeg);
               const yaw = THREE.MathUtils.degToRad(yawDeg);
@@ -205,7 +205,7 @@
           const disabledBones = this.data.disabledBones.map(b => b.trim());
           model.animations.forEach((clip) => {
             clip.tracks = clip.tracks.filter((track) => {
-              // トラック名（例: "両目.rotation", "頭.position" など）に無効化対象のボーン名が含まれるかチェック
+              // トラック名に無効化対象のボーン名が含まれるかチェック
               const isMatch = disabledBones.some(boneName => track.name.includes(boneName));
               return !isMatch;
             });
