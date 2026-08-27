@@ -39,7 +39,7 @@
       }
     });
 
-    // ★【更新】画面タップでモーション切り替え ＋ Y軸位置を0.2上に調整
+    // ★ 画面タップでモーション切り替え（action→idleの戻りのみ滑らかに補間）
     AFRAME.registerComponent('tap-to-action', {
       init: function () {
         const el = this.el;
@@ -49,16 +49,18 @@
         window.addEventListener('click', () => {
           if (!isActionPlaying) {
             isActionPlaying = true;
-            console.log("action を再生します（Y位置を+0.2調整）");
+            console.log("action を再生します（即座に切り替え）");
             
-            // Y座標を +0.2 移動 (0 0 -0.5 -> 0 0.02 -0.5)
+            // ★【変更】即座に Y=0.02 へ移動（アニメーション属性を削除して直接書き換え）
+            el.removeAttribute('animation__move');
             el.setAttribute('position', '0 0.02 -0.5');
 
-            // 1回だけ再生 (loop: once)
+            // ★【変更】即座に action モーションへ切り替え（crossFadeDuration なし）
             el.setAttribute('animation-mixer', {
               clip: 'action',
               loop: 'once',
-              clampWhenFinished: true
+              clampWhenFinished: true,
+              crossFadeDuration: 0
             });
           }
         });
@@ -67,15 +69,21 @@
         el.addEventListener('animation-finished', () => {
           if (isActionPlaying) {
             isActionPlaying = false;
-            console.log("action が終了したため idle に戻します");
+            console.log("action が終了したため idle に滑らかに戻します");
             
-            // Y座標を元の位置に戻す
-            el.setAttribute('position', '0 0 -0.5');
+            // 1. 位置を滑らかに元（Y=0）へ戻す（0.5秒間）
+            el.setAttribute('animation__move', {
+              property: 'position',
+              to: '0 0 -0.5',
+              dur: 500,
+              easing: 'easeInOutQuad'
+            });
 
-            // 完了したら idle ループに戻す
+            // 2. idle へ 0.4 秒かけて滑らかにクロスフェードで戻す
             el.setAttribute('animation-mixer', {
               clip: 'idle',
-              loop: 'repeat'
+              loop: 'repeat',
+              crossFadeDuration: 0.4
             });
           }
         });
