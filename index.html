@@ -33,38 +33,78 @@
       }
     });
 
-    // ★ Three.js の AnimationMixer を直接制御するコンポーネント（位置補間を追加）
+    // ★ Three.js の AnimationMixer 直接制御 ＋ モーフアニメーション機能
     AFRAME.registerComponent('tap-to-action', {
+      schema: {
+        morphName: { type: 'string', default: 'Blink' } // ★制御したいモーフ（シェイプキー）名
+      },
+
       init: function () {
         const el = this.el;
         let mixer = null;
         let actions = {};
         let activeAction = null;
         let isActionPlaying = false;
+        let morphTargets = [];
 
-        // モデルロード完了時に Three.js のミキサーとクリップを準備
+        // ★ モーフの値を時間経過で滑らかに変更する関数
+        const animateMorph = (fromVal, toVal, duration, callback) => {
+          if (morphTargets.length === 0) {
+            if (callback) callback();
+            return;
+          }
+
+          const startTime = performance.now();
+          const step = (now) => {
+            const elapsed = now - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const currentVal = fromVal + (toVal - fromVal) * progress;
+
+            morphTargets.forEach((target) => {
+              target.mesh.morphTargetInfluences[target.index] = currentVal;
+            });
+
+            if (progress < 1) {
+              requestAnimationFrame(step);
+            } else if (callback) {
+              callback();
+            }
+          };
+          requestAnimationFrame(step);
+        };
+
+        // モデルロード完了時に Three.js のミキサー・クリップ・モーフターゲットを準備
         el.addEventListener('model-loaded', () => {
           const model = el.getObject3D('mesh');
           if (!model || !model.animations || model.animations.length === 0) return;
 
           mixer = new THREE.AnimationMixer(model);
 
-          // モデル内の全アニメーションクリップを取得して登録
           model.animations.forEach((clip) => {
             actions[clip.name] = mixer.clipAction(clip);
           });
 
-          // 初期アニメーション (idle) を再生
           if (actions['idle']) {
             activeAction = actions['idle'];
             activeAction.play();
           }
 
-          // action アニメーションが終了した時のイベント（1回再生の設定）
           if (actions['action']) {
             actions['action'].setLoop(THREE.LoopOnce, 1);
             actions['action'].clampWhenFinished = true;
           }
+
+          // ★ 指定されたモーフターゲットを全メッシュから検出
+          morphTargets = [];
+          model.traverse((node) => {
+            if (node.isMesh && node.morphTargetDictionary && node.morphTargetInfluences) {
+              const index = node.morphTargetDictionary[this.data.morphName];
+              if (index !== undefined) {
+                morphTargets.push({ mesh: node, index: index });
+              }
+            }
+          });
+          console.log(`対象モーフ "${this.data.morphName}" を検出: ${morphTargets.length} 件`);
 
           // アニメーション終了検知
           mixer.addEventListener('finished', (e) => {
@@ -72,7 +112,7 @@
               isActionPlaying = false;
               console.log("action 終了: 位置とモーションを滑らかに戻します");
 
-              // ★ 1. 位置を 0.4 秒かけて滑らかに「0 0 -0.5」へ降下（ガクツキ防止）
+              // 位置を 0.4 秒かけて滑らかに「0 0 -0.5」へ降下
               el.removeAttribute('animation__move');
               el.setAttribute('animation__move', {
                 property: 'position',
@@ -81,7 +121,7 @@
                 easing: 'easeInOutQuad'
               });
 
-              // ★ 2. action から idle へ 0.4 秒かけて滑らかにクロスフェード
+              // action から idle へ 0.4 秒かけて滑らかにクロスフェード
               const actionClip = actions['action'];
               const idleClip = actions['idle'];
 
@@ -113,6 +153,11 @@
             actions['action'].reset();
             actions['action'].play();
             activeAction = actions['action'];
+
+            // ★ モーフ再生: 0.3秒(300ms)で 0 -> 0.5 にし、続いて 0.2秒(200ms)で 0.5 -> 0 に戻す
+            animateMorph(0, 0.5, 300, () => {
+              animateMorph(0.5, 0, 200);
+            });
           }
         });
       }
@@ -131,14 +176,14 @@
 
     <a-gltf-model src="bg.glb" position="0 0 -0.3"></a-gltf-model>
 
-    <!-- ★ animation-mixer 属性を使わずに tap-to-action で直接アニメーション制御 -->
+    <!-- ★ morphName に動かしたいモデルのシェイプキー名（例: Blink, Smile 等）を指定 -->
     <a-gltf-model 
       id="avatar" 
       src="character_anim.glb?v=2" 
       position="0 0 -0.5" 
       scale="1.1 1.1 1.1" 
       fix-material
-      tap-to-action>
+      tap-to-action="morphName:まばたき">
     </a-gltf-model>
 
     <a-sky color="#000000"></a-sky>
