@@ -33,7 +33,7 @@
       }
     });
 
-    // ★ 複数モーフの同時制御 ＋ 変化量ランダム化コンポーネント
+    // ★ 複数モーフ・変化量ランダム・連続再生(キュー)対応コンポーネント
     AFRAME.registerComponent('tap-to-action', {
       schema: {
         morphNames: { type: 'array', default: ['Blink'] }
@@ -45,6 +45,7 @@
         let actions = {};
         let activeAction = null;
         let isActionPlaying = false;
+        let hasQueuedAction = false; // ★再生中の追加タップ（キュー）を保持するフラグ
         let morphTargets = [];
 
         // 全モーフターゲットの値をアニメーション変化させる関数
@@ -71,6 +72,29 @@
             }
           };
           requestAnimationFrame(step);
+        };
+
+        // ★ action 再生処理を一括管理する関数
+        const playActionProcess = () => {
+          console.log("action を再生");
+          
+          // 位置を即座に変更
+          el.removeAttribute('animation__move');
+          el.setAttribute('position', '0 0.02 -0.5');
+
+          // idle を停止して action を再生
+          actions['idle'].stop();
+          actions['action'].reset();
+          actions['action'].play();
+          activeAction = actions['action'];
+
+          // モーフターゲットアニメーション（ランダム値）
+          const targetIntensity = Math.random() < 0.5 ? 0.5 : 0.3;
+          console.log(`今回のモーフ変化量: ${targetIntensity}`);
+
+          animateMorphs(0, targetIntensity, 300, () => {
+            animateMorphs(targetIntensity, 0, 200);
+          });
         };
 
         // モデルロード完了処理
@@ -113,24 +137,32 @@
           // アニメーション終了検知
           mixer.addEventListener('finished', (e) => {
             if (e.action === actions['action'] && isActionPlaying) {
-              isActionPlaying = false;
-              console.log("action 終了: 位置とモーションを滑らかに戻します");
+              // ★ 再生中にタップの予約（キュー）があった場合は続けてもう一度再生
+              if (hasQueuedAction) {
+                console.log("キューされた action を続けて再生します");
+                hasQueuedAction = false;
+                playActionProcess();
+              } else {
+                // キューがなければ通常の idle 復帰処理
+                isActionPlaying = false;
+                console.log("action 終了: 位置とモーションを滑らかに戻します");
 
-              el.removeAttribute('animation__move');
-              el.setAttribute('animation__move', {
-                property: 'position',
-                to: '0 0 -0.5',
-                dur: 400,
-                easing: 'easeInOutQuad'
-              });
+                el.removeAttribute('animation__move');
+                el.setAttribute('animation__move', {
+                  property: 'position',
+                  to: '0 0 -0.5',
+                  dur: 400,
+                  easing: 'easeInOutQuad'
+                });
 
-              const actionClip = actions['action'];
-              const idleClip = actions['idle'];
+                const actionClip = actions['action'];
+                const idleClip = actions['idle'];
 
-              idleClip.reset();
-              idleClip.play();
-              actionClip.crossFadeTo(idleClip, 0.4, true);
-              activeAction = idleClip;
+                idleClip.reset();
+                idleClip.play();
+                actionClip.crossFadeTo(idleClip, 0.4, true);
+                activeAction = idleClip;
+              }
             }
           });
         });
@@ -142,26 +174,17 @@
 
         // 画面タップイベント
         window.addEventListener('click', () => {
-          if (!isActionPlaying && actions['action'] && actions['idle']) {
-            isActionPlaying = true;
-            console.log("action を即座に再生");
-
-            el.removeAttribute('animation__move');
-            el.setAttribute('position', '0 0.02 -0.5');
-
-            actions['idle'].stop();
-            actions['action'].reset();
-            actions['action'].play();
-            activeAction = actions['action'];
-
-            // ★ 変化量をランダムで 0.5 または 0.3 に決定
-            const targetIntensity = Math.random() < 0.5 ? 0.5 : 0.3;
-            console.log(`今回のモーフ変化量: ${targetIntensity}`);
-
-            // ★ 0 -> ランダム値 (0.3 or 0.5) へ 0.3秒で変化後、0.2秒で 0 へ復元
-            animateMorphs(0, targetIntensity, 300, () => {
-              animateMorphs(targetIntensity, 0, 200);
-            });
+          if (actions['action'] && actions['idle']) {
+            if (!isActionPlaying) {
+              // 通常の1回目再生
+              isActionPlaying = true;
+              hasQueuedAction = false;
+              playActionProcess();
+            } else {
+              // ★ 再生中のタップ時はキューをオン（連続してもう1回再生する予約）
+              console.log("再生中のタップを検知: 次の再生を予約しました");
+              hasQueuedAction = true;
+            }
           }
         });
       }
@@ -186,7 +209,7 @@
       position="0 0 -0.5" 
       scale="1.1 1.1 1.1" 
       fix-material
-      tap-to-action="morphNames: まばたき,お">
+      tap-to-action="morphNames: Blink, Smile">
     </a-gltf-model>
 
     <a-sky color="#000000"></a-sky>
