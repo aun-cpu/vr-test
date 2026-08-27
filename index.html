@@ -5,12 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Step 2: 人型モデル追加テスト</title>
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-
-  <!-- ★ GLTFアニメーション（animation-mixer）を再生するためのライブラリ -->
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
 
   <script>
-    // ★ GLTFモデルの透け・裏面消失バグをプログラムで強制解決する処理
     AFRAME.registerComponent('fix-material', {
       init: function () {
         this.el.addEventListener('model-loaded', () => {
@@ -36,64 +33,43 @@
       }
     });
 
-    // ★ 修正版：2回目のタップでも固まらずに idle に戻るコンポーネント
+    // ★ 修正版 tap-to-action
     AFRAME.registerComponent('tap-to-action', {
       init: function () {
         const el = this.el;
         let isActionPlaying = false;
 
-        // 安全に idle 状態へリセットする処理
-        const resetToIdle = () => {
-          isActionPlaying = false;
-          console.log("安全に idle 状態に戻します");
-
-          // Y位置を元の高さにセット
-          el.removeAttribute('animation__move');
-          el.setAttribute('position', '0 0 -0.5');
-
-          // アニメーションミキサーを削除して内部状態をクリーンアップ
-          el.removeAttribute('animation-mixer');
-
-          // 1フレーム遅らせて安全に idle を割り振る（フリーズ回避）
-          setTimeout(() => {
-            el.setAttribute('animation-mixer', {
-              clip: 'idle',
-              loop: 'repeat',
-              crossFadeDuration: 0.2
-            });
-          }, 0);
-        };
-
-        // 画面全体がタップされた時の処理
         window.addEventListener('click', () => {
           if (!isActionPlaying) {
-            // 1回目のタップ：action を再生
             isActionPlaying = true;
-            console.log("1回目タップ: action 再生（即座移動）");
+            console.log("action を再生します");
 
+            // 1. 位置を即座に更新
             el.removeAttribute('animation__move');
             el.setAttribute('position', '0 0.02 -0.5');
 
-            el.setAttribute('animation-mixer', {
-              clip: 'action',
-              loop: 'once',
-              clampWhenFinished: true,
-              crossFadeDuration: 0
-            });
-          } else {
-            // 2回目のタップ：動作を途中でキャンセルして安全に idle へ戻す
-            console.log("2回目タップ: 途中でキャンセル");
-            resetToIdle();
+            // 2. ミキサーを一旦破棄して再セット（属性変更の無視とミキサー破綻を防ぐ）
+            el.removeAttribute('animation-mixer');
+            
+            // 1フレーム遅らせて確実にコンポーネントを再生成
+            setTimeout(() => {
+              el.setAttribute('animation-mixer', {
+                clip: 'action',
+                loop: 'once',
+                clampWhenFinished: true,
+                crossFadeDuration: 0
+              });
+            }, 0);
           }
         });
 
-        // モーションが最後まで完了した時
-        el.addEventListener('animation-finished', () => {
+        // モーション再生終了時
+        el.addEventListener('animation-finished', (e) => {
+          // action 終了時のみ処理（他のアニメーションイベントとの混同を防止）
           if (isActionPlaying) {
-            isActionPlaying = false;
-            console.log("action 完了: idle へ滑らかに戻します");
+            console.log("action 完了: idle に戻します");
 
-            // 位置を滑らかに戻す
+            // 1. 位置を元に戻す
             el.setAttribute('animation__move', {
               property: 'position',
               to: '0 0 -0.5',
@@ -101,12 +77,18 @@
               easing: 'easeInOutQuad'
             });
 
-            // idle へクロスフェードで移行
-            el.setAttribute('animation-mixer', {
-              clip: 'idle',
-              loop: 'repeat',
-              crossFadeDuration: 0.4
-            });
+            // 2. 一度破棄してから idle を再セット
+            el.removeAttribute('animation-mixer');
+            setTimeout(() => {
+              el.setAttribute('animation-mixer', {
+                clip: 'idle',
+                loop: 'repeat',
+                crossFadeDuration: 0.4
+              });
+              
+              // idle 再生が再開されたらフラグを下ろす
+              isActionPlaying = false;
+            }, 0);
           }
         });
       }
@@ -116,19 +98,15 @@
 <body>
   <a-scene vr-mode-ui="enabled: true">
     
-    <!-- 視点（カメラ）の位置調整 -->
     <a-entity id="rig" position="0 0.1 -0.4">
       <a-camera look-controls camera="near: 0.01; far: 1000;"></a-camera>
     </a-entity>
 
-    <!-- ライティング -->
     <a-entity light="type: ambient; color: #FFFFFF; intensity: 0.5"></a-entity>
     <a-entity light="type: point; color: #FFFFFF; intensity: 0.5; distance: 30" position="0 2 0"></a-entity>
 
-    <!-- 背景モデル -->
     <a-gltf-model src="bg.glb" position="0 0 -0.3"></a-gltf-model>
 
-    <!-- アバターモデル -->
     <a-gltf-model 
       id="avatar" 
       src="character_anim.glb?v=2" 
@@ -139,7 +117,6 @@
       animation-mixer="clip: idle; loop: repeat">
     </a-gltf-model>
 
-    <!-- 背景色 -->
     <a-sky color="#000000"></a-sky>
 
   </a-scene>
