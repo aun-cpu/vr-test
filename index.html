@@ -525,11 +525,12 @@
       tap-to-action="morphNames: まばたき,え; disabledBones: 両目,頭">
     </a-gltf-model>
 
-    <!-- ★ 奥モデル (avatar2) : 高さはそのまま(y:0)、z座標を-1.5にして1後ろに配置 -->
+    <!-- ★ 奥モデル (avatar2) : rotation="0 180 0" を追加して180度回転 -->
     <a-gltf-model 
       id="avatar2" 
       src="character_anim2.glb" 
-      position="0 0 1.3" 
+      position="0 0 0" 
+      rotation="0 180 0" 
       scale="1.1 1.1 1.1" 
       fix-material="wetness:0.9; metalness: 0.1">
     </a-gltf-model>
