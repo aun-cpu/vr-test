@@ -6,11 +6,11 @@
   <title>Step 2: 人型モデル追加テスト</title>
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
 
-  <!-- ★ GLTFアニメーション（animation-mixer）を再生するためのライブラリ -->
+  <!-- ★【追加】GLTFアニメーション（animation-mixer）を再生するためのライブラリ -->
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
 
+  <!-- ★【既存】GLTFモデルの透け・裏面消失バグをプログラムで強制解決する処理 -->
   <script>
-    // ★ GLTFモデルの透け・裏面消失バグをプログラムで強制解決する処理
     AFRAME.registerComponent('fix-material', {
       init: function () {
         this.el.addEventListener('model-loaded', () => {
@@ -39,46 +39,7 @@
       }
     });
 
-    // ★【追加機能】再生時のボーン位置移動を相対化（オフセット補正）するコンポーネント
-    AFRAME.registerComponent('relative-root-motion', {
-      init: function () {
-        this.initialBonePos = null;
-        this.rootBone = null;
-
-        this.el.addEventListener('model-loaded', () => {
-          const mesh = this.el.getObject3D('mesh');
-          if (!mesh) return;
-
-          // モデル内の最初のSkinnedMeshからルートボーンを取得
-          mesh.traverse((node) => {
-            if (node.isSkinnedMesh && node.skeleton && node.skeleton.bones.length > 0) {
-              if (!this.rootBone) {
-                this.rootBone = node.skeleton.bones[0]; // 全ての親/センターボーン
-              }
-            }
-          });
-        });
-      },
-      tick: function () {
-        if (!this.rootBone) return;
-
-        // 初回（再生直後）の位置を基準点（オフセット）として記憶
-        if (!this.initialBonePos) {
-          this.initialBonePos = {
-            x: this.rootBone.position.x,
-            y: this.rootBone.position.y,
-            z: this.rootBone.position.z
-          };
-        }
-
-        // 基準点からの差分だけを差し引いて相対化（原点付近に留める）
-        this.rootBone.position.x -= this.initialBonePos.x;
-        this.rootBone.position.y -= this.initialBonePos.y;
-        this.rootBone.position.z -= this.initialBonePos.z;
-      }
-    });
-
-    // ★ 画面タップでモーションを切り替えるコンポーネント
+    // ★【新規追加】画面タップでモーションを切り替えるコンポーネント
     AFRAME.registerComponent('tap-to-action', {
       init: function () {
         const el = this.el;
@@ -120,32 +81,31 @@
 <body>
   <a-scene vr-mode-ui="enabled: true">
     
-    <!-- ★重要：視点（カメラ）の位置を調整 -->
-    <a-entity id="rig" position="-2 0.1 -0.4">
+    <!-- ★重要：視点（カメラ）の位置を調整（元の設定を完全維持） -->
+    <a-entity id="rig" position="0 0.1 -0.4">
       <a-camera look-controls camera="near: 0.01; far: 1000;"></a-camera>
     </a-entity>
 
-    <!-- 全体を平均的に照らす光 -->
+    <!-- 全体を平均的に照らす光（元の設定を完全維持） -->
     <a-entity light="type: ambient; color: #FFFFFF; intensity: 0.5"></a-entity>
-    <!-- 部屋の中を照らす光 -->
+    <!-- 部屋の中を照らす光（元の設定を完全維持） -->
     <a-entity light="type: point; color: #FFFFFF; intensity: 0.5; distance: 30" position="0 2 0"></a-entity>
 
     <!-- 背景モデル（bg.glb） -->
     <a-gltf-model src="bg.glb" position="0 0 -0.3"></a-gltf-model>
 
-    <!-- ★ relative-root-motion コンポーネントをアバターに追加 -->
+    <!-- ★【変更点】 tap-to-action を追加し、タップで動作するように設定 -->
     <a-gltf-model 
       id="avatar" 
       src="character_anim.glb?v=2" 
       position="0 0 -0.5" 
       scale="1.1 1.1 1.1" 
       fix-material
-      relative-root-motion
       tap-to-action
       animation-mixer="clip: idle; loop: repeat">
     </a-gltf-model>
 
-    <!-- 空の色 -->
+    <!-- 空の色（元の設定を完全維持） -->
     <a-sky color="#000000"></a-sky>
 
   </a-scene>
