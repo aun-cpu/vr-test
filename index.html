@@ -33,7 +33,7 @@
       }
     });
 
-    // ★ 複数モーフ・変化量ランダム・連続再生(キュー)・idle時定期モーフ・action時頭ランダム回転追加コンポーネント
+    // ★ 複数モーフ・変化量ランダム・連続再生(キュー)・idle時定期モーフ・頭ランダム回転追加コンポーネント
     AFRAME.registerComponent('tap-to-action', {
       schema: {
         morphNames: { type: 'array', default: ['まばたき', 'え'] },
@@ -53,7 +53,7 @@
 
         // ★ 頭ボーン制御用の変数
         let headBone = null;
-        let actionHeadTimer = null;
+        let headTimer = null;
         let isHeadRotating = false;
         let headRotStartTime = 0;
         let headStartQuat = new THREE.Quaternion();
@@ -125,19 +125,18 @@
           }, randomDelay);
         };
 
-        // ★ action 再生中の頭ボーン回転スケジュール関数（回転角度を大きく設定）
-        const scheduleNextActionHeadRotation = () => {
-          clearTimeout(actionHeadTimer);
-          if (!isActionPlaying || !headBone) return;
+        // ★ 常時実行される頭ボーン回転スケジュール関数
+        const scheduleNextHeadRotation = () => {
+          clearTimeout(headTimer);
+          if (!headBone) return;
 
           // 5秒〜10秒の間隔
           const randomDelay = 5000 + Math.random() * 5000;
 
-          actionHeadTimer = setTimeout(() => {
-            if (isActionPlaying && headBone) {
-              console.log("action中の頭ボーン大回転実行");
+          headTimer = setTimeout(() => {
+            if (headBone) {
+              console.log("頭ボーンランダム回転実行");
 
-              // ★ 角度の振れ幅を大幅に拡大
               // X軸（下方向へ 5〜15度）
               const pitchDeg = 5 + Math.random() * 10; 
               // Y軸（左右へ -20〜20度）
@@ -159,12 +158,10 @@
               headRotStartTime = performance.now();
               isHeadRotating = true;
 
-              // 回転終了後に次の回転をスケジュール
+              // 1秒間の回転補間＋余韻（100ms）の後に次の回転をスケジュール
               setTimeout(() => {
-                if (isActionPlaying) {
-                  scheduleNextActionHeadRotation();
-                }
-              }, 700 + 100);
+                scheduleNextHeadRotation();
+              }, 1000 + 100);
             }
           }, randomDelay);
         };
@@ -191,9 +188,6 @@
           animateMorphs(0, targetIntensity, 300, () => {
             animateMorphs(targetIntensity, 0, 200);
           });
-
-          // ★ action 開始時に頭ランダム回転のタイマーをセット
-          scheduleNextActionHeadRotation();
         };
 
         // モデルロード完了処理
@@ -212,12 +206,13 @@
           });
           console.log(`アニメーションからボーン [${disabledBones.join(', ')}] の制御を無効化しました`);
 
-          // ★ 頭ボーンオブジェクトの参照を取得・初期回転を保持
+          // ★ 頭ボーンオブジェクトの参照を取得・初期回転を保持し、回転スケジュールを開始
           model.traverse((node) => {
             if (node.isBone && node.name === '頭') {
               headBone = node;
               headBaseQuat.copy(node.quaternion);
               console.log("頭ボーンの検出に成功しました");
+              scheduleNextHeadRotation(); // ★ モデルロード直後から頭の回転ループを開始
             }
           });
 
@@ -263,8 +258,6 @@
           // アニメーション終了検知
           mixer.addEventListener('finished', (e) => {
             if (e.action === actions['action'] && isActionPlaying) {
-              clearTimeout(actionHeadTimer); // action 終了時に頭回転タイマーをクリア
-
               if (hasQueuedAction) {
                 console.log("キューされた action を続けて再生します");
                 hasQueuedAction = false;
@@ -300,10 +293,10 @@
         this.tick = function (t, dt) {
           if (mixer) mixer.update(dt / 1000);
 
-          // ★ 頭ボーンのアニメーション補間（0.7秒でスムーズに補間）
+          // ★ 頭ボーンのアニメーション補間（1.0秒でスムーズに補間）
           if (isHeadRotating && headBone) {
             const now = performance.now();
-            const progress = Math.min((now - headRotStartTime) / 700, 1);
+            const progress = Math.min((now - headRotStartTime) / 1000, 1);
 
             // クォータニオンの球面線形補間（slerp）
             headBone.quaternion.slerpQuaternions(headStartQuat, headTargetQuat, progress);
