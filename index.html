@@ -47,11 +47,12 @@
         let isActionPlaying = false;
         let hasQueuedAction = false;
         let morphTargets = [];
+        let blinkTargets = []; // ★ 「まばたき」専用配列
         let idleMorphTimer = null; // ★ idle時モーフのタイマーID
 
-        // 全モーフターゲットの値をアニメーション変化させる関数
-        const animateMorphs = (fromVal, toVal, duration, callback) => {
-          if (morphTargets.length === 0) {
+        // 指定したモーフターゲットの値をアニメーション変化させる関数
+        const animateMorphsTarget = (targets, fromVal, toVal, duration, callback) => {
+          if (targets.length === 0) {
             if (callback) callback();
             return;
           }
@@ -62,7 +63,7 @@
             const progress = Math.min(elapsed / duration, 1);
             const currentVal = fromVal + (toVal - fromVal) * progress;
 
-            morphTargets.forEach((target) => {
+            targets.forEach((target) => {
               target.mesh.morphTargetInfluences[target.index] = currentVal;
             });
 
@@ -75,15 +76,20 @@
           requestAnimationFrame(step);
         };
 
-        // ★ モーフを0 → 0.4 → 0（計0.5秒）で指定回数リピートする関数
+        // 全モーフターゲットの値をアニメーション変化させる関数
+        const animateMorphs = (fromVal, toVal, duration, callback) => {
+          animateMorphsTarget(morphTargets, fromVal, toVal, duration, callback);
+        };
+
+        // ★ モーフを 0 → 0.4（0.15秒）→ 0（0.15秒）で計0.3秒でリピートする関数
         const repeatMorphs = (count, maxCount, onComplete) => {
           if (count >= maxCount || isActionPlaying) {
             if (onComplete) onComplete();
             return;
           }
-          // 0.25秒で 0 → 0.4、0.25秒で 0.4 → 0 (1回あたり計0.5秒)
-          animateMorphs(0, 0.4, 250, () => {
-            animateMorphs(0.4, 0, 250, () => {
+          // 0.15秒で 0 → 0.4、0.15秒で 0.4 → 0 (1回あたり計0.3秒)
+          animateMorphs(0, 0.4, 150, () => {
+            animateMorphs(0.4, 0, 150, () => {
               repeatMorphs(count + 1, maxCount, onComplete);
             });
           });
@@ -97,8 +103,15 @@
           
           idleMorphTimer = setTimeout(() => {
             if (!isActionPlaying) {
-              console.log("idle中の定期モーフ実行（0 → 0.4 → 0 を 5回）");
+              console.log("idle中の定期モーフ実行（まばたき0.4固定 / 0 → 0.4 → 0 を 0.3秒間隔で 5回）");
+              
+              // 1. まばたきモーフを0.4に設定
+              blinkTargets.forEach(t => t.mesh.morphTargetInfluences[t.index] = 0.4);
+
+              // 2. 0.3秒 x 5回 = 計1.5秒のモーフリピートアニメーション実行
               repeatMorphs(0, 5, () => {
+                // 3. 全リピート終了後にまばたきを0に戻す
+                blinkTargets.forEach(t => t.mesh.morphTargetInfluences[t.index] = 0);
                 scheduleNextIdleMorph(); // 終了後に次のタイマーをセット
               });
             } else {
@@ -156,6 +169,7 @@
 
           // 対象モーフの検出
           morphTargets = [];
+          blinkTargets = [];
           const targetsToSearch = this.data.morphNames.map(name => name.trim());
 
           model.traverse((node) => {
@@ -163,7 +177,11 @@
               targetsToSearch.forEach((morphName) => {
                 const index = node.morphTargetDictionary[morphName];
                 if (index !== undefined) {
-                  morphTargets.push({ mesh: node, index: index, name: morphName });
+                  const item = { mesh: node, index: index, name: morphName };
+                  morphTargets.push(item);
+                  if (morphName === 'まばたき') {
+                    blinkTargets.push(item);
+                  }
                 }
               });
             }
