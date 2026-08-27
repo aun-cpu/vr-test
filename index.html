@@ -116,7 +116,7 @@
 
         // sound5 / sound6 用の変数
         let sound5Buffer = null;
-        let sound6Buffer = null; // ★ sound6用のバッファを追加
+        let sound6Buffer = null;
         let sound5Source = null;
         let sound5GainNode = null;
         const SOUND5_BASE_VOLUME = 0.3;
@@ -200,7 +200,6 @@
               .then(decoded => { sound5Buffer = decoded; })
               .catch(err => console.log("sound5.mp3 読み込み失敗:", err));
 
-            // ★ sound6.mp3 読み込みを追加
             fetch('sound6.mp3')
               .then(res => res.arrayBuffer())
               .then(buf => audioCtx.decodeAudioData(buf))
@@ -256,9 +255,7 @@
           }
         };
 
-        // ★ sound5 / sound6 ループ開始（action中用）
         const startSound5Loop = () => {
-          // ゲージが半分（150）を超えたら sound6Buffer を使用、それ以外は sound5Buffer
           const targetBuffer = (actionCount > maxCount / 2) ? sound6Buffer : sound5Buffer;
 
           if (!targetBuffer) return;
@@ -475,7 +472,6 @@
             updateGauge();
           }
 
-          // ★ action再生中: sound5またはsound6をループ再生開始 ＋ 再生スタートの瞬間に音量を強調
           startSound5Loop();
           boostSound5Volume();
 
@@ -664,7 +660,8 @@
           }
         };
 
-        window.addEventListener('click', () => {
+        // 共通のアクショントリガー関数
+        const triggerAction = () => {
           const now = performance.now();
           const interval = now - lastTapTime;
 
@@ -685,7 +682,48 @@
               boostSound5Volume();
             }
           }
+        };
+
+        // 画面タップイベント
+        window.addEventListener('click', () => {
+          triggerAction();
         });
+
+        // リモコン（キーボード/メディアキー扱い）のイベント
+        window.addEventListener('keydown', (e) => {
+          const triggerKeys = [
+            'MediaTrackNext',
+            'MediaPlayPause',
+            'MediaSelect',
+            'Enter',
+            'Space',
+            'a', 'A'
+          ];
+
+          if (triggerKeys.includes(e.key) || e.code === 'MediaTrackNext' || e.code === 'Space' || e.code === 'Enter') {
+            e.preventDefault();
+            triggerAction();
+          }
+        });
+
+        // リモコン（ゲームパッド扱い）の入力チェック
+        let lastGamepadButtonState = false;
+        const checkGamepad = () => {
+          const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+          for (let i = 0; i < gamepads.length; i++) {
+            const gp = gamepads[i];
+            if (gp) {
+              const isButtonPressed = gp.buttons.some((btn, idx) => (idx === 0 || idx === 1 || idx === 2) && btn.pressed);
+              if (isButtonPressed && !lastGamepadButtonState) {
+                triggerAction();
+              }
+              lastGamepadButtonState = isButtonPressed;
+            }
+          }
+          requestAnimationFrame(checkGamepad);
+        };
+        requestAnimationFrame(checkGamepad);
+
       }
     });
   </script>
