@@ -295,18 +295,26 @@
           actions['idle'].stop();
 
           // ★ 直前のタップ間隔が0.4秒以下だった場合は再生スピードを1.3倍に設定
+          const speed = isFastTap ? 1.3 : 1.0;
+
           const actionClip = actions['action'];
-          actionClip.timeScale = isFastTap ? 1.3 : 1.0;
+          actionClip.timeScale = speed;
 
           actionClip.reset();
           actionClip.play();
           activeAction = actionClip;
 
-          // ★ avatar2 用の action2 再生制御（位置の繰り上げやゲージ操作はなし）
+          // ★ sound.mp3 / sound2.mp3 をランダムで再生（倍速制御付き）
+          const soundFile = Math.random() < 0.5 ? 'sound.mp3' : 'sound2.mp3';
+          const audio = new Audio(soundFile);
+          audio.playbackRate = speed;
+          audio.play().catch(err => console.log("音声再生エラー:", err));
+
+          // ★ avatar2 用の action2 再生制御
           if (actions2['idle2'] && actions2['action2']) {
             actions2['idle2'].stop();
             const actionClip2 = actions2['action2'];
-            actionClip2.timeScale = isFastTap ? 1.3 : 1.0;
+            actionClip2.timeScale = speed;
             actionClip2.reset();
             actionClip2.play();
           }
@@ -493,7 +501,6 @@
   </script>
 </head>
 <body>
-  <!-- ★ 画面左上に配置する縦型ゲージUI -->
   <div id="gauge-container">
     <div id="gauge-bar-bg">
       <div id="gauge-bar-fill"></div>
@@ -506,16 +513,12 @@
       <a-camera look-controls camera="near: 0.01; far: 1000;"></a-camera>
     </a-entity>
 
-    <!-- ★ 光の反射・濡れツヤ感をきれいに見せるためのライティング配置 -->
     <a-entity light="type: ambient; color: #FFFFFF; intensity: 0.4"></a-entity>
-    <!-- 斜め上からの光（濡れたハイライトを作る） -->
     <a-entity light="type: directional; color: #FFFFFF; intensity: 0.8" position="1 2 1"></a-entity>
-    <!-- 正面斜め下からの補光（影を和らげる） -->
     <a-entity light="type: point; color: #FFFFFF; intensity: 0.4; distance: 10" position="-0.5 1 -0.2"></a-entity>
 
     <a-gltf-model src="bg.glb" position="0 0 -0.3"></a-gltf-model>
 
-    <!-- 手前モデル (avatar) -->
     <a-gltf-model 
       id="avatar" 
       src="character_anim.glb?v=2" 
@@ -525,7 +528,6 @@
       tap-to-action="morphNames: まばたき,え; disabledBones: 両目,頭">
     </a-gltf-model>
 
-    <!-- ★ 奥モデル (avatar2) : rotation="0 180 0" を追加して180度回転 -->
     <a-gltf-model 
       id="avatar2" 
       src="character_anim2.glb" 
