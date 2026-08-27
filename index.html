@@ -7,6 +7,49 @@
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
 
+  <style>
+    /* ★ 画面左側のゲージUI設定 */
+    #gauge-container {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      z-index: 9999;
+      width: 180px;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 12px;
+      border-radius: 8px;
+      color: #fff;
+      font-family: sans-serif;
+      user-select: none;
+      pointer-events: none; /* タップイベントを透過してA-Frameに届かせる */
+    }
+    #gauge-title {
+      font-size: 12px;
+      margin-bottom: 6px;
+      font-weight: bold;
+    }
+    #gauge-bar-bg {
+      width: 100%;
+      height: 16px;
+      background-color: #444;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #666;
+    }
+    #gauge-bar-fill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #4caf50, #81c784);
+      transition: width 0.3s ease;
+    }
+    #gauge-text {
+      font-size: 12px;
+      text-align: right;
+      margin-top: 4px;
+      color: #ddd;
+    }
+  </style>
+
   <script>
     AFRAME.registerComponent('fix-material', {
       init: function () {
@@ -33,7 +76,6 @@
       }
     });
 
-    // ★ 複数モーフ・変化量ランダム・連続再生(キュー)・idle時定期モーフ・頭＆両目ランダム回転追加コンポーネント
     AFRAME.registerComponent('tap-to-action', {
       schema: {
         morphNames: { type: 'array', default: ['まばたき', 'え'] },
@@ -51,6 +93,21 @@
         let otherMorphTargets = [];
         let idleMorphTimer = null;
 
+        // ★ カウント・ゲージ管理用の変数
+        let actionCount = 0;
+        const maxCount = 500;
+        const fillEl = document.getElementById('gauge-bar-fill');
+        const textEl = document.getElementById('gauge-text');
+
+        // UIを更新する関数
+        const updateGauge = () => {
+          if (fillEl && textEl) {
+            const percentage = Math.min((actionCount / maxCount) * 100, 100);
+            fillEl.style.width = percentage + '%';
+            textEl.textContent = `${actionCount} / ${maxCount}`;
+          }
+        };
+
         // 頭ボーン制御用
         let headBone = null;
         let headTimer = null;
@@ -60,16 +117,15 @@
         let headTargetQuat = new THREE.Quaternion();
         let headBaseQuat = new THREE.Quaternion();
 
-        // ★ 両目ボーン制御用の変数
+        // 両目ボーン制御用の変数
         let eyesBone = null;
         let isEyesRotating = false;
         let eyesRotStartTime = 0;
-        let eyesRotDuration = 300; // アニメーション時間(ms)
+        let eyesRotDuration = 300;
         let eyesStartQuat = new THREE.Quaternion();
         let eyesTargetQuat = new THREE.Quaternion();
-        let eyesBaseQuat = new THREE.Quaternion(); // 初期回転を保持
+        let eyesBaseQuat = new THREE.Quaternion();
 
-        // 指定したモーフターゲットの値をアニメーション変化させる関数
         const animateMorphsTarget = (targets, fromVal, toVal, duration, callback) => {
           if (targets.length === 0) {
             if (callback) callback();
@@ -95,12 +151,10 @@
           requestAnimationFrame(step);
         };
 
-        // 全モーフターゲットの値をアニメーション変化させる関数（アクション時用）
         const animateMorphs = (fromVal, toVal, duration, callback) => {
           animateMorphsTarget(morphTargets, fromVal, toVal, duration, callback);
         };
 
-        // ★ 両目ボーンを目標の回転クォータニオンへスムーズに変化させる関数
         const rotateEyesTo = (targetQuat, duration = 300, callback = null) => {
           if (!eyesBone) {
             if (callback) callback();
@@ -117,18 +171,15 @@
           }, duration);
         };
 
-        // ★ 両目をカメラ方向へ30度回転させる目標クォータニオンの計算関数
         const getEyesLookAtCameraQuat = (angleDeg = 30) => {
           if (!eyesBone) return eyesBaseQuat;
 
-          // カメラのワールド位置を取得
           const camera = el.sceneEl.camera;
           if (!camera) return eyesBaseQuat;
 
           const cameraWorldPos = new THREE.Vector3();
           camera.getWorldPosition(cameraWorldPos);
 
-          // 両目ボーンのワールド位置・回転行列を取得
           const eyesWorldPos = new THREE.Vector3();
           eyesBone.getWorldPosition(eyesWorldPos);
 
@@ -137,55 +188,40 @@
             eyesBone.parent.getWorldQuaternion(parentWorldQuat);
           }
 
-          // カメラへの方向ベクトル
           const dirToCamera = new THREE.Vector3().subVectors(cameraWorldPos, eyesWorldPos).normalize();
-
-          // ローカル空間でのカメラ方向ベクトルに変換
           const localDir = dirToCamera.clone().applyQuaternion(parentWorldQuat.clone().invert());
-
-          // 正面（+Z）からカメラ方向への完全な回転を計算
           const fullLookAtQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), localDir);
 
-          // 基準回転から30度（指定度数）のみ回転するようにクォータニオンを球面補間（slerp）
-          // （完全対面までの度数を30度に制限）
           const angleRad = THREE.MathUtils.degToRad(angleDeg);
           const fullAngle = eyesBaseQuat.angleTo(fullLookAtQuat);
           const factor = fullAngle > 0 ? Math.min(angleRad / fullAngle, 1.0) : 0;
 
-          const targetQuat = eyesBaseQuat.clone().slerp(fullLookAtQuat, factor);
-          return targetQuat;
+          return eyesBaseQuat.clone().slerp(fullLookAtQuat, factor);
         };
 
-        // ★ 「まばたき」以外のモーフを 0 → 0.4（0.15秒）→ 0（0.15秒）でリピートする関数
-        const repeatMorphs = (count, maxCount, onComplete) => {
-          if (count >= maxCount || isActionPlaying) {
+        const repeatMorphs = (count, maxMorphCount, onComplete) => {
+          if (count >= maxMorphCount || isActionPlaying) {
             if (onComplete) onComplete();
             return;
           }
           animateMorphsTarget(otherMorphTargets, 0, 0.4, 150, () => {
             animateMorphsTarget(otherMorphTargets, 0.4, 0, 150, () => {
-              repeatMorphs(count + 1, maxCount, onComplete);
+              repeatMorphs(count + 1, maxMorphCount, onComplete);
             });
           });
         };
 
-        // ★ idle 中に 10秒以上のランダムな間隔でモーフ（まばたき除外）を起動するループ
         const scheduleNextIdleMorph = () => {
           clearTimeout(idleMorphTimer);
           const randomDelay = 10000 + Math.random() * 10000;
 
           idleMorphTimer = setTimeout(() => {
             if (!isActionPlaying) {
-              console.log("idle中の定期モーフ実行（両目をカメラへ30°回転 + まばたき除外モーフ）");
-
-              // 1. 両目をカメラ方向に30度回転させる
               const targetQuat = getEyesLookAtCameraQuat(30);
               rotateEyesTo(targetQuat, 300, () => {
-                // 2. モーフアニメーションを実行 (0.3秒 × 5回 = 1.5秒)
                 repeatMorphs(0, 5, () => {
-                  // 3. モーフ完了後に両目を元の姿勢へもどす
                   rotateEyesTo(eyesBaseQuat, 300, () => {
-                    scheduleNextIdleMorph(); // 次のタイマーをセット
+                    scheduleNextIdleMorph();
                   });
                 });
               });
@@ -195,7 +231,6 @@
           }, randomDelay);
         };
 
-        // 常時実行される頭ボーン回転スケジュール関数
         const scheduleNextHeadRotation = () => {
           clearTimeout(headTimer);
           if (!headBone) return;
@@ -233,7 +268,12 @@
           console.log("action を再生");
           clearTimeout(idleMorphTimer);
 
-          // アクション再生時は両目を初期姿勢に戻す
+          // ★ 再生回数をインクリメント（上限500）し、UIを更新
+          if (actionCount < maxCount) {
+            actionCount++;
+            updateGauge();
+          }
+
           if (eyesBone) rotateEyesTo(eyesBaseQuat, 200);
 
           el.removeAttribute('animation__move');
@@ -264,7 +304,6 @@
             });
           });
 
-          // ボーンオブジェクトの参照取得（頭・両目）
           model.traverse((node) => {
             if (node.isBone) {
               if (node.name === '頭') {
@@ -272,11 +311,9 @@
                 headBaseQuat.copy(node.quaternion);
                 scheduleNextHeadRotation();
               }
-              // ★ 両目ボーンの検出と初期回転保持
               if (node.name === '両目') {
                 eyesBone = node;
                 eyesBaseQuat.copy(node.quaternion);
-                console.log("両目ボーンの検出に成功しました");
               }
             }
           });
@@ -298,7 +335,6 @@
             actions['action'].clampWhenFinished = true;
           }
 
-          // 対象モーフの検出
           morphTargets = [];
           otherMorphTargets = [];
           const targetsToSearch = this.data.morphNames.map(name => name.trim());
@@ -318,7 +354,6 @@
             }
           });
 
-          // アニメーション終了検知
           mixer.addEventListener('finished', (e) => {
             if (e.action === actions['action'] && isActionPlaying) {
               if (hasQueuedAction) {
@@ -349,11 +384,9 @@
           });
         });
 
-        // フレーム更新
         this.tick = function (t, dt) {
           if (mixer) mixer.update(dt / 1000);
 
-          // 頭ボーンの回転補間
           if (isHeadRotating && headBone) {
             const now = performance.now();
             const progress = Math.min((now - headRotStartTime) / 1000, 1);
@@ -361,7 +394,6 @@
             if (progress >= 1) isHeadRotating = false;
           }
 
-          // ★ 両目ボーンの回転補間
           if (isEyesRotating && eyesBone) {
             const now = performance.now();
             const progress = Math.min((now - eyesRotStartTime) / eyesRotDuration, 1);
@@ -370,7 +402,6 @@
           }
         };
 
-        // 画面タップイベント
         window.addEventListener('click', () => {
           if (actions['action'] && actions['idle']) {
             if (!isActionPlaying) {
@@ -387,6 +418,15 @@
   </script>
 </head>
 <body>
+  <!-- ★ 画面左上に配置するゲージUI -->
+  <div id="gauge-container">
+    <div id="gauge-title">ACTION COUNT</div>
+    <div id="gauge-bar-bg">
+      <div id="gauge-bar-fill"></div>
+    </div>
+    <div id="gauge-text">0 / 500</div>
+  </div>
+
   <a-scene vr-mode-ui="enabled: true">
 
     <a-entity id="rig" position="0 0.1 -0.4">
