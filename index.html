@@ -122,7 +122,7 @@
         const SOUND5_BASE_VOLUME = 0.3;
         const SOUND5_BOOST_VOLUME = 1.0;
 
-        // sound7 / sound8 / sound9 用の変数（追加）
+        // sound7 / sound8 / sound9 用の変数
         let sound7Buffer = null;
         let sound8Buffer = null;
         let sound9Buffer = null;
@@ -188,7 +188,7 @@
           }
         };
 
-        // 事前読み込み済みバッファーを再生する関数（追加）
+        // 事前読み込み済みバッファーを再生する関数
         const playBufferSound = (buffer, speed = 1.0, volumeBoost = 2.0) => {
           if (!buffer) return;
           try {
@@ -215,20 +215,20 @@
           }
         };
 
-        // アイドル時のランダム音声再生関数（sound7, sound8, sound9 の中からランダム再生）（追加）
+        // アイドル時のランダム音声再生関数（sound7, sound8, sound9 の音量を半分の1.0に調整）
         const playRandomIdleSound = () => {
           const idleBuffers = [sound7Buffer, sound8Buffer, sound9Buffer].filter(b => b !== null);
           if (idleBuffers.length === 0) return;
 
           const chosenBuffer = idleBuffers[Math.floor(Math.random() * idleBuffers.length)];
-          playBufferSound(chosenBuffer, 1.0, 2.0);
+          playBufferSound(chosenBuffer, 1.0, 1.0); // 音量を 2.0 から 1.0 へ変更
         };
 
         // 各種音声データの事前読み込み
         const initAudioBuffers = async () => {
           try {
             initAudioContext();
-            
+
             fetch('sound4.mp3')
               .then(res => res.arrayBuffer())
               .then(buf => audioCtx.decodeAudioData(buf))
@@ -247,7 +247,6 @@
               .then(decoded => { sound6Buffer = decoded; })
               .catch(err => console.log("sound6.mp3 読み込み失敗:", err));
 
-            // sound7, sound8, sound9 の事前読み込み（追加）
             fetch('sound7.mp3')
               .then(res => res.arrayBuffer())
               .then(buf => audioCtx.decodeAudioData(buf))
@@ -477,7 +476,6 @@
             if (!isActionPlaying) {
               const targetQuat = getEyesLookAtCameraQuat(30);
               rotateEyesTo(targetQuat, 300, () => {
-                // アイドルモーフ再生開始時に sound7/sound8/sound9 をランダム再生
                 playRandomIdleSound();
                 repeatMorphs(0, 5, () => {
                   rotateEyesTo(eyesBaseQuat, 300, () => {
