@@ -114,6 +114,13 @@
         let sound4Buffer = null;
         let sound4Source = null;
 
+        // ★ sound5 (action中ループ再生音) 用の変数
+        let sound5Buffer = null;
+        let sound5Source = null;
+        let sound5GainNode = null;
+        const SOUND5_BASE_VOLUME = 0.3; // 通常時の音量
+        const SOUND5_BOOST_VOLUME = 1.0; // アクション発生瞬間の強音量
+
         // ★ 擬似的なリバーブ（反響）効果を作成する関数
         const createReverbNode = (ctx) => {
           const sampleRate = ctx.sampleRate;
@@ -161,7 +168,6 @@
             source.playbackRate.value = speed;
             gainNode.gain.value = volumeBoost;
 
-            // ★ 出力をダイレクト音と反響音（リバーブ）の2系統に分岐してミックス
             source.connect(gainNode);
             gainNode.connect(audioCtx.destination); // 直接音
 
@@ -176,20 +182,32 @@
           }
         };
 
-        // sound4.mp3 の読み込み
-        const initSound4 = async () => {
+        // sound4.mp3 & sound5.mp3 の事前読み込み
+        const initAudioBuffers = async () => {
           try {
-            const response = await fetch('sound4.mp3');
-            const arrayBuffer = await response.arrayBuffer();
             initAudioContext();
-            sound4Buffer = await audioCtx.decodeAudioData(arrayBuffer);
+            
+            // sound4 読み込み
+            fetch('sound4.mp3')
+              .then(res => res.arrayBuffer())
+              .then(buf => audioCtx.decodeAudioData(buf))
+              .then(decoded => { sound4Buffer = decoded; })
+              .catch(err => console.log("sound4.mp3 読み込み失敗:", err));
+
+            // sound5 読み込み
+            fetch('sound5.mp3')
+              .then(res => res.arrayBuffer())
+              .then(buf => audioCtx.decodeAudioData(buf))
+              .then(decoded => { sound5Buffer = decoded; })
+              .catch(err => console.log("sound5.mp3 読み込み失敗:", err));
+
           } catch (err) {
-            console.log("sound4.mp3 の読み込みに失敗しました:", err);
+            console.log("オーディオ初期化エラー:", err);
           }
         };
-        initSound4();
+        initAudioBuffers();
 
-        // ★ sound4.mp3 ループ再生関数（音量ダウン＋手前から定位＋反響）
+        // ★ sound4.mp3 ループ再生関数
         const playSound4Loop = () => {
           if (!sound4Buffer) return;
           initAudioContext();
@@ -202,26 +220,20 @@
           sound4Source.playbackRate.value = 0.9;
           sound4Source.detune.value = 500;
 
-          // 1. 音量調整ノード（★音量を下げる: 0.5）
           const gainNode = audioCtx.createGain();
           gainNode.gain.value = 0.5;
 
-          // 2. 空間定位ノード（★手前・目の前から聞こえるように配置）
           const pannerNode = audioCtx.createPanner();
           pannerNode.panningModel = 'HRTF';
           pannerNode.distanceModel = 'inverse';
-          // 座標: x=0 (中央), y=0 (高さ中央), z=0.1 (カメラ・ユーザーのすぐ手前)
           pannerNode.setPosition(0, 0, 0.1);
 
-          // 接続: Source -> Gain -> Panner -> Speaker / Reverb
           sound4Source.connect(gainNode);
           gainNode.connect(pannerNode);
+          pannerNode.connect(audioCtx.destination);
 
-          pannerNode.connect(audioCtx.destination); // 直接音
-
-          // ★ 反響（エコー）を若干追加
           const reverbGain = audioCtx.createGain();
-          reverbGain.gain.value = 0.25; // 反響量 (25%)
+          reverbGain.gain.value = 0.25;
           pannerNode.connect(reverbGain);
           reverbGain.connect(reverbNode);
 
@@ -236,6 +248,55 @@
             } catch (e) {}
             sound4Source = null;
           }
+        };
+
+        // ★ sound5.mp3 ループ開始（action中用）
+        const startSound5Loop = () => {
+          if (!sound5Buffer) return;
+          initAudioContext();
+
+          if (sound5Source) return; // 既に再生中ならスキップ
+
+          sound5Source = audioCtx.createBufferSource();
+          sound5Source.buffer = sound5Buffer;
+          sound5Source.loop = true;
+
+          sound5GainNode = audioCtx.createGain();
+          sound5GainNode.gain.value = SOUND5_BASE_VOLUME;
+
+          sound5Source.connect(sound5GainNode);
+          sound5GainNode.connect(audioCtx.destination);
+
+          // エコー効果も付与
+          const reverbGain = audioCtx.createGain();
+          reverbGain.gain.value = 0.2;
+          sound5GainNode.connect(reverbGain);
+          reverbGain.connect(reverbNode);
+
+          sound5Source.start(0);
+        };
+
+        // ★ sound5.mp3 ループ停止
+        const stopSound5Loop = () => {
+          if (sound5Source) {
+            try {
+              sound5Source.stop();
+              sound5Source.disconnect();
+            } catch (e) {}
+            sound5Source = null;
+            sound5GainNode = null;
+          }
+        };
+
+        // ★ actionが再生された瞬間に sound5 の音量を一瞬上げる関数
+        const boostSound5Volume = () => {
+          if (!sound5GainNode || !audioCtx) return;
+
+          const now = audioCtx.currentTime;
+          // 一瞬で音量を上げ、0.4秒かけて元のベース音量へ滑らかに戻す
+          sound5GainNode.gain.cancelScheduledValues(now);
+          sound5GainNode.gain.setValueAtTime(SOUND5_BOOST_VOLUME, now);
+          sound5GainNode.gain.linearRampToValueAtTime(SOUND5_BASE_VOLUME, now + 0.4);
         };
 
         const updateGauge = () => {
@@ -403,6 +464,10 @@
           clearTimeout(idleMorphTimer);
 
           stopSound4Loop();
+          
+          // ★ action再生中: sound5をループ再生開始 ＋ 再生スタートの瞬間に音量を強調
+          startSound5Loop();
+          boostSound5Volume();
 
           if (actionCount < maxCount) {
             actionCount++;
@@ -515,6 +580,9 @@
               } else {
                 isActionPlaying = false;
 
+                // ★ action完全終了時: sound5のループを停止
+                stopSound5Loop();
+
                 el.removeAttribute('animation__move');
                 el.setAttribute('animation__move', {
                   property: 'position',
@@ -610,6 +678,8 @@
               playActionProcess();
             } else {
               hasQueuedAction = true;
+              // 連打（キュー入力）時もタップした瞬間に音量をブースト
+              boostSound5Volume();
             }
           }
         });
