@@ -36,7 +36,8 @@
     // ★ 複数モーフ・変化量ランダム・連続再生(キュー)・idle時定期モーフ追加コンポーネント
     AFRAME.registerComponent('tap-to-action', {
       schema: {
-        morphNames: { type: 'array', default: ['まばたき', 'え'] }
+        morphNames: { type: 'array', default: ['まばたき', 'え'] },
+        disabledBones: { type: 'array', default: ['両目', '頭'] } // ★ アニメーションから無効化するボーン名リスト
       },
 
       init: function () {
@@ -143,6 +144,17 @@
         el.addEventListener('model-loaded', () => {
           const model = el.getObject3D('mesh');
           if (!model || !model.animations || model.animations.length === 0) return;
+
+          // ★ 指定されたボーンのアニメーショントラックを削除（アニメーション制御を無効化）
+          const disabledBones = this.data.disabledBones.map(b => b.trim());
+          model.animations.forEach((clip) => {
+            clip.tracks = clip.tracks.filter((track) => {
+              // トラック名（例: "両目.rotation", "頭.position" など）に無効化対象のボーン名が含まれるかチェック
+              const isMatch = disabledBones.some(boneName => track.name.includes(boneName));
+              return !isMatch;
+            });
+          });
+          console.log(`アニメーションからボーン [${disabledBones.join(', ')}] の制御を無効化しました`);
 
           mixer = new THREE.AnimationMixer(model);
 
@@ -257,7 +269,7 @@
       position="0 0 -0.5" 
       scale="1.1 1.1 1.1" 
       fix-material
-      tap-to-action="morphNames: まばたき,え">
+      tap-to-action="morphNames: まばたき,え; disabledBones: 両目,頭">
     </a-gltf-model>
 
     <a-sky color="#000000"></a-sky>
