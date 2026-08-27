@@ -119,6 +119,37 @@
         let sound4Buffer = null;
         let sound4Source = null;
 
+        // ★ 効果音増幅用 Web Audio API 関数（サウンド1〜3の音量を限界以上に上げる場合にも対応）
+        const playAmplifiedSound = async (soundFile, speed, volumeBoost = 2.0) => {
+          try {
+            if (!audioCtx) {
+              audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+              await audioCtx.resume();
+            }
+
+            const response = await fetch(soundFile);
+            const arrayBuffer = await response.arrayBuffer();
+            const buffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+            const source = audioCtx.createBufferSource();
+            const gainNode = audioCtx.createGain();
+
+            source.buffer = buffer;
+            source.playbackRate.value = speed;
+            
+            // ★ 音量を上げる（1.0が通常、2.0で2倍音量）
+            gainNode.gain.value = volumeBoost;
+
+            source.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            source.start(0);
+          } catch (err) {
+            console.log("音声再生エラー (" + soundFile + "):", err);
+          }
+        };
+
         // sound4.mp3 の読み込み
         const initSound4 = async () => {
           try {
@@ -132,7 +163,7 @@
         };
         initSound4();
 
-        // sound4.mp3 ループ再生関数 (0.9倍速・ピッチやや高め)
+        // sound4.mp3 ループ再生関数 (0.9倍速・ピッチ高め)
         const playSound4Loop = () => {
           if (!audioCtx || !sound4Buffer) return;
 
@@ -149,8 +180,8 @@
           // 再生速度を 0.9倍 に設定
           sound4Source.playbackRate.value = 0.9;
 
-          // 音の高さを若干高く設定 (+200 cents = 半音2つ分高く)
-          sound4Source.detune.value = 200;
+          // ★ 音の高さをさらに高く設定 (+500 cents = 約5半音高く)
+          sound4Source.detune.value = 500;
 
           sound4Source.connect(audioCtx.destination);
           sound4Source.start(0);
@@ -360,16 +391,12 @@
           actionClip.play();
           activeAction = actionClip;
 
-          // ★ sound.mp3 / sound2.mp3 をランダムで再生（倍速制御付き）
+          // ★ sound.mp3 / sound2.mp3 を音量2.0倍（増幅）で再生
           const soundFile = Math.random() < 0.5 ? 'sound.mp3' : 'sound2.mp3';
-          const randomAudio = new Audio(soundFile);
-          randomAudio.playbackRate = speed;
-          randomAudio.play().catch(err => console.log("音声再生エラー (sound/sound2):", err));
+          playAmplifiedSound(soundFile, speed, 2.0);
 
-          // ★ sound3.mp3 を必須で同時再生（倍速制御付き）
-          const sound3Audio = new Audio('sound3.mp3');
-          sound3Audio.playbackRate = speed;
-          sound3Audio.play().catch(err => console.log("音声再生エラー (sound3):", err));
+          // ★ sound3.mp3 も音量2.0倍（増幅）で同時再生
+          playAmplifiedSound('sound3.mp3', speed, 2.0);
 
           // ★ avatar2 用の action2 再生制御
           if (actions2['idle2'] && actions2['action2']) {
