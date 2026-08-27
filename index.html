@@ -215,13 +215,13 @@
           }
         };
 
-        // アイドル時のランダム音声再生関数（sound7, sound8, sound9 の音量を半分の1.0に調整）
+        // アイドル時のランダム音声再生関数（sound7, sound8, sound9 の音量を 0.4 に変更）
         const playRandomIdleSound = () => {
           const idleBuffers = [sound7Buffer, sound8Buffer, sound9Buffer].filter(b => b !== null);
           if (idleBuffers.length === 0) return;
 
           const chosenBuffer = idleBuffers[Math.floor(Math.random() * idleBuffers.length)];
-          playBufferSound(chosenBuffer, 1.0, 1.0); // 音量を 2.0 から 1.0 へ変更
+          playBufferSound(chosenBuffer, 1.0, 0.4); 
         };
 
         // 各種音声データの事前読み込み
@@ -526,7 +526,7 @@
           clearTimeout(idleMorphTimer);
 
           stopSound4Loop();
-          
+
           if (actionCount < maxCount) {
             actionCount++;
             updateGauge();
