@@ -33,11 +33,11 @@
       }
     });
 
-    // ★ 複数モーフ・変化量ランダム・連続再生(キュー)・idle時定期モーフ・頭ランダム回転追加コンポーネント
+    // ★ 複数モーフ・変化量ランダム・連続再生(キュー)・idle時定期モーフ・頭＆両目ランダム回転追加コンポーネント
     AFRAME.registerComponent('tap-to-action', {
       schema: {
         morphNames: { type: 'array', default: ['まばたき', 'え'] },
-        disabledBones: { type: 'array', default: ['両目', '頭'] } // ★ アニメーションから無効化するボーン名リスト
+        disabledBones: { type: 'array', default: ['両目', '頭'] }
       },
 
       init: function () {
@@ -48,17 +48,26 @@
         let isActionPlaying = false;
         let hasQueuedAction = false;
         let morphTargets = [];
-        let otherMorphTargets = []; // ★ 「まばたき」以外のモーフ用配列
-        let idleMorphTimer = null; // ★ idle時モーフのタイマーID
+        let otherMorphTargets = [];
+        let idleMorphTimer = null;
 
-        // ★ 頭ボーン制御用の変数
+        // 頭ボーン制御用
         let headBone = null;
         let headTimer = null;
         let isHeadRotating = false;
         let headRotStartTime = 0;
         let headStartQuat = new THREE.Quaternion();
         let headTargetQuat = new THREE.Quaternion();
-        let headBaseQuat = new THREE.Quaternion(); // 初期回転を保持
+        let headBaseQuat = new THREE.Quaternion();
+
+        // ★ 両目ボーン制御用の変数
+        let eyesBone = null;
+        let isEyesRotating = false;
+        let eyesRotStartTime = 0;
+        let eyesRotDuration = 300; // アニメーション時間(ms)
+        let eyesStartQuat = new THREE.Quaternion();
+        let eyesTargetQuat = new THREE.Quaternion();
+        let eyesBaseQuat = new THREE.Quaternion(); // 初期回転を保持
 
         // 指定したモーフターゲットの値をアニメーション変化させる関数
         const animateMorphsTarget = (targets, fromVal, toVal, duration, callback) => {
@@ -91,13 +100,68 @@
           animateMorphsTarget(morphTargets, fromVal, toVal, duration, callback);
         };
 
-        // ★ 「まばたき」以外のモーフを 0 → 0.4（0.15秒）→ 0（0.15秒）で計0.3秒でリピートする関数
+        // ★ 両目ボーンを目標の回転クォータニオンへスムーズに変化させる関数
+        const rotateEyesTo = (targetQuat, duration = 300, callback = null) => {
+          if (!eyesBone) {
+            if (callback) callback();
+            return;
+          }
+          eyesStartQuat.copy(eyesBone.quaternion);
+          eyesTargetQuat.copy(targetQuat);
+          eyesRotDuration = duration;
+          eyesRotStartTime = performance.now();
+          isEyesRotating = true;
+
+          setTimeout(() => {
+            if (callback) callback();
+          }, duration);
+        };
+
+        // ★ 両目をカメラ方向へ30度回転させる目標クォータニオンの計算関数
+        const getEyesLookAtCameraQuat = (angleDeg = 30) => {
+          if (!eyesBone) return eyesBaseQuat;
+
+          // カメラのワールド位置を取得
+          const camera = el.sceneEl.camera;
+          if (!camera) return eyesBaseQuat;
+
+          const cameraWorldPos = new THREE.Vector3();
+          camera.getWorldPosition(cameraWorldPos);
+
+          // 両目ボーンのワールド位置・回転行列を取得
+          const eyesWorldPos = new THREE.Vector3();
+          eyesBone.getWorldPosition(eyesWorldPos);
+
+          const parentWorldQuat = new THREE.Quaternion();
+          if (eyesBone.parent) {
+            eyesBone.parent.getWorldQuaternion(parentWorldQuat);
+          }
+
+          // カメラへの方向ベクトル
+          const dirToCamera = new THREE.Vector3().subVectors(cameraWorldPos, eyesWorldPos).normalize();
+
+          // ローカル空間でのカメラ方向ベクトルに変換
+          const localDir = dirToCamera.clone().applyQuaternion(parentWorldQuat.clone().invert());
+
+          // 正面（+Z）からカメラ方向への完全な回転を計算
+          const fullLookAtQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), localDir);
+
+          // 基準回転から30度（指定度数）のみ回転するようにクォータニオンを球面補間（slerp）
+          // （完全対面までの度数を30度に制限）
+          const angleRad = THREE.MathUtils.degToRad(angleDeg);
+          const fullAngle = eyesBaseQuat.angleTo(fullLookAtQuat);
+          const factor = fullAngle > 0 ? Math.min(angleRad / fullAngle, 1.0) : 0;
+
+          const targetQuat = eyesBaseQuat.clone().slerp(fullLookAtQuat, factor);
+          return targetQuat;
+        };
+
+        // ★ 「まばたき」以外のモーフを 0 → 0.4（0.15秒）→ 0（0.15秒）でリピートする関数
         const repeatMorphs = (count, maxCount, onComplete) => {
           if (count >= maxCount || isActionPlaying) {
             if (onComplete) onComplete();
             return;
           }
-          // 0.15秒で 0 → 0.4、0.15秒で 0.4 → 0 (1回あたり計0.3秒)
           animateMorphsTarget(otherMorphTargets, 0, 0.4, 150, () => {
             animateMorphsTarget(otherMorphTargets, 0.4, 0, 150, () => {
               repeatMorphs(count + 1, maxCount, onComplete);
@@ -108,16 +172,22 @@
         // ★ idle 中に 10秒以上のランダムな間隔でモーフ（まばたき除外）を起動するループ
         const scheduleNextIdleMorph = () => {
           clearTimeout(idleMorphTimer);
-          // 10秒〜20秒（10000ms + ランダムで最高10000ms）の間隔
           const randomDelay = 10000 + Math.random() * 10000;
-          
+
           idleMorphTimer = setTimeout(() => {
             if (!isActionPlaying) {
-              console.log("idle中の定期モーフ実行（まばたき除外 / 0 → 0.4 → 0 を 0.3秒間隔で 5回）");
-              
-              // まばたき以外のモーフでリピートアニメーション実行
-              repeatMorphs(0, 5, () => {
-                scheduleNextIdleMorph(); // 終了後に次のタイマーをセット
+              console.log("idle中の定期モーフ実行（両目をカメラへ30°回転 + まばたき除外モーフ）");
+
+              // 1. 両目をカメラ方向に30度回転させる
+              const targetQuat = getEyesLookAtCameraQuat(30);
+              rotateEyesTo(targetQuat, 300, () => {
+                // 2. モーフアニメーションを実行 (0.3秒 × 5回 = 1.5秒)
+                repeatMorphs(0, 5, () => {
+                  // 3. モーフ完了後に両目を元の姿勢へもどす
+                  rotateEyesTo(eyesBaseQuat, 300, () => {
+                    scheduleNextIdleMorph(); // 次のタイマーをセット
+                  });
+                });
               });
             } else {
               scheduleNextIdleMorph();
@@ -125,30 +195,23 @@
           }, randomDelay);
         };
 
-        // ★ 常時実行される頭ボーン回転スケジュール関数
+        // 常時実行される頭ボーン回転スケジュール関数
         const scheduleNextHeadRotation = () => {
           clearTimeout(headTimer);
           if (!headBone) return;
 
-          // 5秒〜10秒の間隔
           const randomDelay = 5000 + Math.random() * 5000;
 
           headTimer = setTimeout(() => {
             if (headBone) {
-              console.log("頭ボーンランダム回転実行");
-
-              // X軸（下方向へ 5〜15度）
-              const pitchDeg = 5 + Math.random() * 10; 
-              // Y軸（左右へ -20〜20度）
-              const yawDeg = (Math.random() - 0.5) * 40; 
-              // Z軸（首をかしげる方向へ -15〜15度）
-              const rollDeg = (Math.random() - 0.5) * 30; 
+              const pitchDeg = 5 + Math.random() * 10;
+              const yawDeg = (Math.random() - 0.5) * 40;
+              const rollDeg = (Math.random() - 0.5) * 30;
 
               const pitch = THREE.MathUtils.degToRad(pitchDeg);
               const yaw = THREE.MathUtils.degToRad(yawDeg);
               const roll = THREE.MathUtils.degToRad(rollDeg);
 
-              // 元の基準姿勢に対するオフセット回転を作成
               const offsetEuler = new THREE.Euler(pitch, yaw, roll, 'YXZ');
               const offsetQuat = new THREE.Quaternion().setFromEuler(offsetEuler);
 
@@ -158,7 +221,6 @@
               headRotStartTime = performance.now();
               isHeadRotating = true;
 
-              // 1秒間の回転補間＋余韻（100ms）の後に次の回転をスケジュール
               setTimeout(() => {
                 scheduleNextHeadRotation();
               }, 1000 + 100);
@@ -166,24 +228,23 @@
           }, randomDelay);
         };
 
-        // ★ action 再生処理を一括管理する関数
+        // action 再生処理を一括管理する関数
         const playActionProcess = () => {
           console.log("action を再生");
-          clearTimeout(idleMorphTimer); // アクション開始時は idle モーフタイマーをクリア
-          
-          // 位置を即座に変更
+          clearTimeout(idleMorphTimer);
+
+          // アクション再生時は両目を初期姿勢に戻す
+          if (eyesBone) rotateEyesTo(eyesBaseQuat, 200);
+
           el.removeAttribute('animation__move');
           el.setAttribute('position', '0 0.02 -0.5');
 
-          // idle を停止して action を再生
           actions['idle'].stop();
           actions['action'].reset();
           actions['action'].play();
           activeAction = actions['action'];
 
-          // モーフターゲットアニメーション（ランダム値）
           const targetIntensity = Math.random() < 0.5 ? 0.5 : 0.3;
-          console.log(`今回のモーフ変化量: ${targetIntensity}`);
 
           animateMorphs(0, targetIntensity, 300, () => {
             animateMorphs(targetIntensity, 0, 200);
@@ -195,24 +256,28 @@
           const model = el.getObject3D('mesh');
           if (!model || !model.animations || model.animations.length === 0) return;
 
-          // ★ 指定されたボーンのアニメーショントラックを削除（アニメーション制御を無効化）
           const disabledBones = this.data.disabledBones.map(b => b.trim());
           model.animations.forEach((clip) => {
             clip.tracks = clip.tracks.filter((track) => {
-              // トラック名に無効化対象のボーン名が含まれるかチェック
               const isMatch = disabledBones.some(boneName => track.name.includes(boneName));
               return !isMatch;
             });
           });
-          console.log(`アニメーションからボーン [${disabledBones.join(', ')}] の制御を無効化しました`);
 
-          // ★ 頭ボーンオブジェクトの参照を取得・初期回転を保持し、回転スケジュールを開始
+          // ボーンオブジェクトの参照取得（頭・両目）
           model.traverse((node) => {
-            if (node.isBone && node.name === '頭') {
-              headBone = node;
-              headBaseQuat.copy(node.quaternion);
-              console.log("頭ボーンの検出に成功しました");
-              scheduleNextHeadRotation(); // ★ モデルロード直後から頭の回転ループを開始
+            if (node.isBone) {
+              if (node.name === '頭') {
+                headBone = node;
+                headBaseQuat.copy(node.quaternion);
+                scheduleNextHeadRotation();
+              }
+              // ★ 両目ボーンの検出と初期回転保持
+              if (node.name === '両目') {
+                eyesBone = node;
+                eyesBaseQuat.copy(node.quaternion);
+                console.log("両目ボーンの検出に成功しました");
+              }
             }
           });
 
@@ -225,7 +290,6 @@
           if (actions['idle']) {
             activeAction = actions['idle'];
             activeAction.play();
-            // ★ 初期ロード完了後に idle 時の定期モーフタイマーを開始
             scheduleNextIdleMorph();
           }
 
@@ -253,18 +317,15 @@
               });
             }
           });
-          console.log(`対象モーフ [${targetsToSearch.join(', ')}] を検出: 全体 ${morphTargets.length} 件 / idle用(まばたき除外) ${otherMorphTargets.length} 件`);
 
           // アニメーション終了検知
           mixer.addEventListener('finished', (e) => {
             if (e.action === actions['action'] && isActionPlaying) {
               if (hasQueuedAction) {
-                console.log("キューされた action を続けて再生します");
                 hasQueuedAction = false;
                 playActionProcess();
               } else {
                 isActionPlaying = false;
-                console.log("action 終了: 位置とモーションを滑らかに戻します");
 
                 el.removeAttribute('animation__move');
                 el.setAttribute('animation__move', {
@@ -282,7 +343,6 @@
                 actionClip.crossFadeTo(idleClip, 0.4, true);
                 activeAction = idleClip;
 
-                // ★ idle に復帰したら定期モーフタイマーを再開
                 scheduleNextIdleMorph();
               }
             }
@@ -293,17 +353,20 @@
         this.tick = function (t, dt) {
           if (mixer) mixer.update(dt / 1000);
 
-          // ★ 頭ボーンのアニメーション補間（1.0秒でスムーズに補間）
+          // 頭ボーンの回転補間
           if (isHeadRotating && headBone) {
             const now = performance.now();
             const progress = Math.min((now - headRotStartTime) / 1000, 1);
-
-            // クォータニオンの球面線形補間（slerp）
             headBone.quaternion.slerpQuaternions(headStartQuat, headTargetQuat, progress);
+            if (progress >= 1) isHeadRotating = false;
+          }
 
-            if (progress >= 1) {
-              isHeadRotating = false;
-            }
+          // ★ 両目ボーンの回転補間
+          if (isEyesRotating && eyesBone) {
+            const now = performance.now();
+            const progress = Math.min((now - eyesRotStartTime) / eyesRotDuration, 1);
+            eyesBone.quaternion.slerpQuaternions(eyesStartQuat, eyesTargetQuat, progress);
+            if (progress >= 1) isEyesRotating = false;
           }
         };
 
@@ -315,7 +378,6 @@
               hasQueuedAction = false;
               playActionProcess();
             } else {
-              console.log("再生中のタップを検知: 次の再生を予約しました");
               hasQueuedAction = true;
             }
           }
@@ -326,7 +388,7 @@
 </head>
 <body>
   <a-scene vr-mode-ui="enabled: true">
-    
+
     <a-entity id="rig" position="0 0.1 -0.4">
       <a-camera look-controls camera="near: 0.01; far: 1000;"></a-camera>
     </a-entity>
