@@ -306,9 +306,14 @@
 
           // ★ sound.mp3 / sound2.mp3 をランダムで再生（倍速制御付き）
           const soundFile = Math.random() < 0.5 ? 'sound.mp3' : 'sound2.mp3';
-          const audio = new Audio(soundFile);
-          audio.playbackRate = speed;
-          audio.play().catch(err => console.log("音声再生エラー:", err));
+          const randomAudio = new Audio(soundFile);
+          randomAudio.playbackRate = speed;
+          randomAudio.play().catch(err => console.log("音声再生エラー (sound/sound2):", err));
+
+          // ★ sound3.mp3 を必須で同時再生（倍速制御付き）
+          const sound3Audio = new Audio('sound3.mp3');
+          sound3Audio.playbackRate = speed;
+          sound3Audio.play().catch(err => console.log("音声再生エラー (sound3):", err));
 
           // ★ avatar2 用の action2 再生制御
           if (actions2['idle2'] && actions2['action2']) {
