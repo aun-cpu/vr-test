@@ -38,6 +38,44 @@
         });
       }
     });
+
+    // ★【新規追加】画面タップでモーションを切り替えるコンポーネント
+    AFRAME.registerComponent('tap-to-action', {
+      init: function () {
+        const el = this.el;
+        let isActionPlaying = false;
+
+        // 画面全体（ウィンドウ）がタップ・クリックされた時の処理
+        window.addEventListener('click', () => {
+          if (!isActionPlaying) {
+            // アクション再生中に切り替え
+            isActionPlaying = true;
+            console.log("action を再生します");
+            
+            // 1回だけ再生 (loop: once)
+            el.setAttribute('animation-mixer', {
+              clip: 'action',
+              loop: 'once',
+              clampWhenFinished: true
+            });
+          }
+        });
+
+        // モーション再生が終了した時のイベント検知
+        el.addEventListener('animation-finished', () => {
+          if (isActionPlaying) {
+            isActionPlaying = false;
+            console.log("action が終了したため idle に戻します");
+            
+            // 完了したら idle ループに戻す
+            el.setAttribute('animation-mixer', {
+              clip: 'idle',
+              loop: 'repeat'
+            });
+          }
+        });
+      }
+    });
   </script>
 </head>
 <body>
@@ -56,13 +94,14 @@
     <!-- 背景モデル（bg.glb） -->
     <a-gltf-model src="bg.glb" position="0 0 -0.3"></a-gltf-model>
 
-    <!-- ★【変更点】animation-mixer="clip: idle; loop: repeat" を追加し、idleモーションをループ再生 -->
+    <!-- ★【変更点】 tap-to-action を追加し、タップで動作するように設定 -->
     <a-gltf-model 
       id="avatar" 
       src="character_anim.glb?v=2" 
       position="0 0 -0.5" 
       scale="1.1 1.1 1.1" 
       fix-material
+      tap-to-action
       animation-mixer="clip: idle; loop: repeat">
     </a-gltf-model>
 
