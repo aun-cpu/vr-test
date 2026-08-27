@@ -114,6 +114,59 @@
         const maxCount = 300;
         const fillEl = document.getElementById('gauge-bar-fill');
 
+        // ★ sound4.mp3 の Web Audio API ループ制御用変数
+        let audioCtx = null;
+        let sound4Buffer = null;
+        let sound4Source = null;
+
+        // sound4.mp3 の読み込み
+        const initSound4 = async () => {
+          try {
+            const response = await fetch('sound4.mp3');
+            const arrayBuffer = await response.arrayBuffer();
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            sound4Buffer = await audioCtx.decodeAudioData(arrayBuffer);
+          } catch (err) {
+            console.log("sound4.mp3 の読み込みに失敗しました:", err);
+          }
+        };
+        initSound4();
+
+        // sound4.mp3 ループ再生関数 (0.9倍速・ピッチやや高め)
+        const playSound4Loop = () => {
+          if (!audioCtx || !sound4Buffer) return;
+
+          if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+          }
+
+          stopSound4Loop(); // 二重再生防止
+
+          sound4Source = audioCtx.createBufferSource();
+          sound4Source.buffer = sound4Buffer;
+          sound4Source.loop = true;
+
+          // 再生速度を 0.9倍 に設定
+          sound4Source.playbackRate.value = 0.9;
+
+          // 音の高さを若干高く設定 (+200 cents = 半音2つ分高く)
+          sound4Source.detune.value = 200;
+
+          sound4Source.connect(audioCtx.destination);
+          sound4Source.start(0);
+        };
+
+        // sound4.mp3 停止関数
+        const stopSound4Loop = () => {
+          if (sound4Source) {
+            try {
+              sound4Source.stop();
+              sound4Source.disconnect();
+            } catch (e) {}
+            sound4Source = null;
+          }
+        };
+
         // UIを更新する関数
         const updateGauge = () => {
           if (fillEl) {
@@ -282,6 +335,9 @@
           console.log("action を再生");
           clearTimeout(idleMorphTimer);
 
+          // ★ action再生を開始するため sound4 のループを停止
+          stopSound4Loop();
+
           if (actionCount < maxCount) {
             actionCount++;
             updateGauge();
@@ -367,6 +423,8 @@
           if (actions['idle']) {
             activeAction = actions['idle'];
             activeAction.play();
+            // ★ 初期ロード時（idle状態）で sound4 を再生
+            playSound4Loop();
             scheduleNextIdleMorph();
           }
 
@@ -418,6 +476,10 @@
 
                 idleClip.reset();
                 idleClip.play();
+
+                // ★ idle状態に戻るため sound4 のループ再生を再開
+                playSound4Loop();
+
                 actionClip.crossFadeTo(idleClip, 0.4, true);
                 activeAction = idleClip;
 
