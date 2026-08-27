@@ -33,10 +33,10 @@
       }
     });
 
-    // ★ Three.js の AnimationMixer 直接制御 ＋ モーフアニメーション機能
+    // ★ 複数モーフの同時制御に対応した AnimationMixer コンポーネント
     AFRAME.registerComponent('tap-to-action', {
       schema: {
-        morphName: { type: 'string', default: 'Blink' } // ★制御したいモーフ（シェイプキー）名
+        morphNames: { type: 'array', default: ['Blink'] } // ★配列で複数モーフ名を受け取る
       },
 
       init: function () {
@@ -47,8 +47,8 @@
         let isActionPlaying = false;
         let morphTargets = [];
 
-        // ★ モーフの値を時間経過で滑らかに変更する関数
-        const animateMorph = (fromVal, toVal, duration, callback) => {
+        // ★ 指定された全モーフターゲットの値を同時にアニメーション変化させる関数
+        const animateMorphs = (fromVal, toVal, duration, callback) => {
           if (morphTargets.length === 0) {
             if (callback) callback();
             return;
@@ -60,6 +60,7 @@
             const progress = Math.min(elapsed / duration, 1);
             const currentVal = fromVal + (toVal - fromVal) * progress;
 
+            // 保持しているすべての対象モーフの重みを一括で更新
             morphTargets.forEach((target) => {
               target.mesh.morphTargetInfluences[target.index] = currentVal;
             });
@@ -94,17 +95,21 @@
             actions['action'].clampWhenFinished = true;
           }
 
-          // ★ 指定されたモーフターゲットを全メッシュから検出
+          // ★ 指定された複数のモーフターゲットを全メッシュから一括検出
           morphTargets = [];
+          const targetsToSearch = this.data.morphNames.map(name => name.trim());
+
           model.traverse((node) => {
             if (node.isMesh && node.morphTargetDictionary && node.morphTargetInfluences) {
-              const index = node.morphTargetDictionary[this.data.morphName];
-              if (index !== undefined) {
-                morphTargets.push({ mesh: node, index: index });
-              }
+              targetsToSearch.forEach((morphName) => {
+                const index = node.morphTargetDictionary[morphName];
+                if (index !== undefined) {
+                  morphTargets.push({ mesh: node, index: index, name: morphName });
+                }
+              });
             }
           });
-          console.log(`対象モーフ "${this.data.morphName}" を検出: ${morphTargets.length} 件`);
+          console.log(`対象モーフ [${targetsToSearch.join(', ')}] を検出: 計 ${morphTargets.length} 件`);
 
           // アニメーション終了検知
           mixer.addEventListener('finished', (e) => {
@@ -154,9 +159,9 @@
             actions['action'].play();
             activeAction = actions['action'];
 
-            // ★ モーフ再生: 0.3秒(300ms)で 0 -> 0.5 にし、続いて 0.2秒(200ms)で 0.5 -> 0 に戻す
-            animateMorph(0, 0.5, 300, () => {
-              animateMorph(0.5, 0, 200);
+            // ★ 登録されたすべてのモーフを同時に「0.3秒で 0 -> 0.5」にし、続いて「0.2秒で 0.5 -> 0」へ戻す
+            animateMorphs(0, 0.5, 300, () => {
+              animateMorphs(0.5, 0, 200);
             });
           }
         });
@@ -176,14 +181,14 @@
 
     <a-gltf-model src="bg.glb" position="0 0 -0.3"></a-gltf-model>
 
-    <!-- ★ morphName に動かしたいモデルのシェイプキー名（例: Blink, Smile 等）を指定 -->
+    <!-- ★ morphNames に動かしたい複数のシェイプキー名をカンマ区切りで指定 -->
     <a-gltf-model 
       id="avatar" 
       src="character_anim.glb?v=2" 
       position="0 0 -0.5" 
       scale="1.1 1.1 1.1" 
       fix-material
-      tap-to-action="morphName:お">
+      tap-to-action="morphNames: まばたき,お">
     </a-gltf-model>
 
     <a-sky color="#000000"></a-sky>
