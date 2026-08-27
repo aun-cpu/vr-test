@@ -33,7 +33,7 @@
       }
     });
 
-    // ★ 複数モーフ・変化量ランダム・連続再生(キュー)・idle時定期モーフ追加コンポーネント
+    // ★ 複数モーフ・変化量ランダム・連続再生(キュー)・idle時定期モーフ・action時頭ランダム回転追加コンポーネント
     AFRAME.registerComponent('tap-to-action', {
       schema: {
         morphNames: { type: 'array', default: ['まばたき', 'え'] },
@@ -50,6 +50,15 @@
         let morphTargets = [];
         let otherMorphTargets = []; // ★ 「まばたき」以外のモーフ用配列
         let idleMorphTimer = null; // ★ idle時モーフのタイマーID
+
+        // ★ 頭ボーン制御用の変数
+        let headBone = null;
+        let actionHeadTimer = null;
+        let isHeadRotating = false;
+        let headRotStartTime = 0;
+        let headStartQuat = new THREE.Quaternion();
+        let headTargetQuat = new THREE.Quaternion();
+        let headBaseQuat = new THREE.Quaternion(); // 初期回転を保持
 
         // 指定したモーフターゲットの値をアニメーション変化させる関数
         const animateMorphsTarget = (targets, fromVal, toVal, duration, callback) => {
@@ -116,6 +125,50 @@
           }, randomDelay);
         };
 
+        // ★ action 再生中の頭ボーン回転スケジュール関数
+        const scheduleNextActionHeadRotation = () => {
+          clearTimeout(actionHeadTimer);
+          if (!isActionPlaying || !headBone) return;
+
+          // 5秒〜10秒（5000ms + ランダムで最高5000ms）の間隔
+          const randomDelay = 5000 + Math.random() * 5000;
+
+          actionHeadTimer = setTimeout(() => {
+            if (isActionPlaying && headBone) {
+              console.log("action中の頭ボーンランダム回転実行");
+
+              // 上方向以外のランダムな回転角度（ラジアン）を設定
+              // X軸（下方向へ 0〜5度）
+              const pitchDeg = Math.random() * 5; 
+              // Y軸（左右へ -5〜5度）
+              const yawDeg = (Math.random() - 0.5) * 10; 
+              // Z軸（傾き -5〜5度）
+              const rollDeg = (Math.random() - 0.5) * 10; 
+
+              const pitch = THREE.MathUtils.degToRad(pitchDeg);
+              const yaw = THREE.MathUtils.degToRad(yawDeg);
+              const roll = THREE.MathUtils.degToRad(rollDeg);
+
+              // 元の基準姿勢に対するオフセット回転を作成
+              const offsetEuler = new THREE.Euler(pitch, yaw, roll, 'YXZ');
+              const offsetQuat = new THREE.Quaternion().setFromEuler(offsetEuler);
+
+              headStartQuat.copy(headBone.quaternion);
+              headTargetQuat.copy(headBaseQuat).multiply(offsetQuat);
+
+              headRotStartTime = performance.now();
+              isHeadRotating = true;
+
+              // 回転終了後に次の回転をスケジュール
+              setTimeout(() => {
+                if (isActionPlaying) {
+                  scheduleNextActionHeadRotation();
+                }
+              }, 700 + 100);
+            }
+          }, randomDelay);
+        };
+
         // ★ action 再生処理を一括管理する関数
         const playActionProcess = () => {
           console.log("action を再生");
@@ -138,6 +191,9 @@
           animateMorphs(0, targetIntensity, 300, () => {
             animateMorphs(targetIntensity, 0, 200);
           });
+
+          // ★ action 開始時に頭ランダム回転のタイマーをセット
+          scheduleNextActionHeadRotation();
         };
 
         // モデルロード完了処理
@@ -155,6 +211,15 @@
             });
           });
           console.log(`アニメーションからボーン [${disabledBones.join(', ')}] の制御を無効化しました`);
+
+          // ★ 頭ボーンオブジェクトの参照を取得・初期回転を保持
+          model.traverse((node) => {
+            if (node.isBone && node.name === '頭') {
+              headBone = node;
+              headBaseQuat.copy(node.quaternion);
+              console.log("頭ボーンの検出に成功しました");
+            }
+          });
 
           mixer = new THREE.AnimationMixer(model);
 
@@ -198,6 +263,8 @@
           // アニメーション終了検知
           mixer.addEventListener('finished', (e) => {
             if (e.action === actions['action'] && isActionPlaying) {
+              clearTimeout(actionHeadTimer); // action 終了時に頭回転タイマーをクリア
+
               if (hasQueuedAction) {
                 console.log("キューされた action を続けて再生します");
                 hasQueuedAction = false;
@@ -232,6 +299,19 @@
         // フレーム更新
         this.tick = function (t, dt) {
           if (mixer) mixer.update(dt / 1000);
+
+          // ★ 頭ボーンのアニメーション補間（0.7秒でスムーズに補間）
+          if (isHeadRotating && headBone) {
+            const now = performance.now();
+            const progress = Math.min((now - headRotStartTime) / 700, 1);
+
+            // クォータニオンの球面線形補間（slerp）
+            headBone.quaternion.slerpQuaternions(headStartQuat, headTargetQuat, progress);
+
+            if (progress >= 1) {
+              isHeadRotating = false;
+            }
+          }
         };
 
         // 画面タップイベント
