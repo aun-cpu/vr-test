@@ -5,11 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Step 2: 人型モデル追加テスト</title>
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-
-  <!-- ★【追加】GLTFアニメーション（animation-mixer）を再生するためのライブラリ -->
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
 
-  <!-- ★【既存】GLTFモデルの透け・裏面消失バグをプログラムで強制解決する処理 -->
   <script>
     AFRAME.registerComponent('fix-material', {
       init: function () {
@@ -20,15 +17,12 @@
           mesh.traverse((node) => {
             if (node.isMesh && node.material) {
               const mat = node.material;
-
-              // 1. 裏面もすべて描画する（両面描画を強制）
               mat.side = THREE.DoubleSide;
 
-              // 2. 透過バグ（裏透け・不自然な透過）を防ぐ
               if (mat.transparent) {
-                mat.alphaTest = 0.5;      // 50%以下の透明度はくっきり切り抜く
-                mat.transparent = false;  // 半透明計算を無効化して不透明化
-                mat.depthWrite = true;   // 奥行き（Zバッファ）を正しく書き込む
+                mat.alphaTest = 0.5;
+                mat.transparent = false;
+                mat.depthWrite = true;
               }
 
               mat.needsUpdate = true;
@@ -39,44 +33,79 @@
       }
     });
 
-    // ★【更新】画面タップでモーション切り替え ＋ Y軸位置を0.2上に調整
+    // ★ Three.js の AnimationMixer を直接制御するコンポーネント
     AFRAME.registerComponent('tap-to-action', {
       init: function () {
         const el = this.el;
+        let mixer = null;
+        let actions = {};
+        let activeAction = null;
         let isActionPlaying = false;
 
-        // 画面全体（ウィンドウ）がタップ・クリックされた時の処理
-        window.addEventListener('click', () => {
-          if (!isActionPlaying) {
-            isActionPlaying = true;
-            console.log("action を再生します（Y位置を+0.2調整）");
-            
-            // Y座標を +0.2 移動 (0 0 -0.5 -> 0 0.02 -0.5)
-            el.setAttribute('position', '0 0.02 -0.5');
+        // モデルロード完了時に Three.js のミキサーとクリップを準備
+        el.addEventListener('model-loaded', () => {
+          const model = el.getObject3D('mesh');
+          if (!model || !model.animations || model.animations.length === 0) return;
 
-            // 1回だけ再生 (loop: once)
-            el.setAttribute('animation-mixer', {
-              clip: 'action',
-              loop: 'once',
-              clampWhenFinished: true
-            });
+          mixer = new THREE.AnimationMixer(model);
+
+          // モデル内の全アニメーションクリップを取得して登録
+          model.animations.forEach((clip) => {
+            actions[clip.name] = mixer.clipAction(clip);
+          });
+
+          // 初期アニメーション (idle) を再生
+          if (actions['idle']) {
+            activeAction = actions['idle'];
+            activeAction.play();
           }
+
+          // action アニメーションが終了した時のイベント（1回再生の設定）
+          if (actions['action']) {
+            actions['action'].setLoop(THREE.LoopOnce, 1);
+            actions['action'].clampWhenFinished = true;
+          }
+
+          // アニメーション終了検知
+          mixer.addEventListener('finished', (e) => {
+            if (e.action === actions['action'] && isActionPlaying) {
+              isActionPlaying = false;
+              console.log("action 終了: idle へ滑らかにクロスフェード");
+
+              // 1. 位置を元の座標に戻す
+              el.setAttribute('position', '0 0 -0.5');
+
+              // 2. action から idle へ 0.4 秒かけて滑らかに補間切り替え
+              const actionClip = actions['action'];
+              const idleClip = actions['idle'];
+
+              idleClip.reset();
+              idleClip.play();
+              actionClip.crossFadeTo(idleClip, 0.4, true);
+              activeAction = idleClip;
+            }
+          });
         });
 
-        // モーション再生が終了した時のイベント検知
-        el.addEventListener('animation-finished', () => {
-          if (isActionPlaying) {
-            isActionPlaying = false;
-            console.log("action が終了したため idle に戻します");
-            
-            // Y座標を元の位置に戻す
-            el.setAttribute('position', '0 0 -0.5');
+        // 毎フレームミキサーを更新
+        this.tick = function (t, dt) {
+          if (mixer) mixer.update(dt / 1000);
+        };
 
-            // 完了したら idle ループに戻す
-            el.setAttribute('animation-mixer', {
-              clip: 'idle',
-              loop: 'repeat'
-            });
+        // 画面タップイベント
+        window.addEventListener('click', () => {
+          if (!isActionPlaying && actions['action'] && actions['idle']) {
+            isActionPlaying = true;
+            console.log("action を即座に再生");
+
+            // 位置を調整
+            el.setAttribute('position', '0 0.02 -0.5');
+
+            // idle を停止し、即座に action を再生 (クロスフェードなし)
+            actions['idle'].stop();
+            actions['action'].reset();
+            actions['action'].play();
+            activeAction = actions['action'];
           }
         });
       }
@@ -86,31 +115,25 @@
 <body>
   <a-scene vr-mode-ui="enabled: true">
     
-    <!-- ★重要：視点（カメラ）の位置を調整（元の設定を完全維持） -->
     <a-entity id="rig" position="0 0.1 -0.4">
       <a-camera look-controls camera="near: 0.01; far: 1000;"></a-camera>
     </a-entity>
 
-    <!-- 全体を平均的に照らす光（元の設定を完全維持） -->
     <a-entity light="type: ambient; color: #FFFFFF; intensity: 0.5"></a-entity>
-    <!-- 部屋の中を照らす光（元の設定を完全維持） -->
     <a-entity light="type: point; color: #FFFFFF; intensity: 0.5; distance: 30" position="0 2 0"></a-entity>
 
-    <!-- 背景モデル（bg.glb） -->
     <a-gltf-model src="bg.glb" position="0 0 -0.3"></a-gltf-model>
 
-    <!-- ★ tap-to-action を適用 -->
+    <!-- ★ animation-mixer 属性を使わずに tap-to-action で直接アニメーション制御 -->
     <a-gltf-model 
       id="avatar" 
       src="character_anim.glb?v=2" 
       position="0 0 -0.5" 
       scale="1.1 1.1 1.1" 
       fix-material
-      tap-to-action
-      animation-mixer="clip: idle; loop: repeat">
+      tap-to-action>
     </a-gltf-model>
 
-    <!-- 空の色（元の設定を完全維持） -->
     <a-sky color="#000000"></a-sky>
 
   </a-scene>
