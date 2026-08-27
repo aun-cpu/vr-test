@@ -51,8 +51,8 @@
             isActionPlaying = true;
             console.log("action を再生します（Y位置を+0.2調整）");
             
-            // Y座標を +0.2 移動 (0 0 -0.5 -> 0 0.2 -0.5)
-            el.setAttribute('position', '0 0.2 -0.5');
+            // Y座標を +0.2 移動 (0 0 -0.5 -> 0 0.02 -0.5)
+            el.setAttribute('position', '0 0.02 -0.5');
 
             // 1回だけ再生 (loop: once)
             el.setAttribute('animation-mixer', {
