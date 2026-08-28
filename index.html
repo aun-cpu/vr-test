@@ -114,13 +114,13 @@
         let sound4Buffer = null;
         let sound4Source = null;
 
-        // sound5 / sound6 用の変数
+        // sound5 / sound6 用の変数（音量を大きく設定）
         let sound5Buffer = null;
         let sound6Buffer = null;
         let sound5Source = null;
         let sound5GainNode = null;
-        const SOUND5_BASE_VOLUME = 0.3;
-        const SOUND5_BOOST_VOLUME = 1.0;
+        const SOUND5_BASE_VOLUME = 0.8;  // 旧: 0.3 から変更
+        const SOUND5_BOOST_VOLUME = 2.0; // 旧: 1.0 から変更
 
         // sound7 / sound8 / sound9 用の変数
         let sound7Buffer = null;
@@ -158,8 +158,8 @@
           }
         };
 
-        // 効果音再生用（反響効果＋音量調整対応）
-        const playAmplifiedSound = async (soundFile, speed, volumeBoost = 2.0) => {
+        // 効果音再生用（sound1~3等の単体音声用、デフォルト音量を 2.0 -> 4.0 に拡張）
+        const playAmplifiedSound = async (soundFile, speed, volumeBoost = 4.0) => {
           try {
             initAudioContext();
 
@@ -188,7 +188,7 @@
           }
         };
 
-        // 事前読み込み済みバッファーを再生する関数
+        // 事前読み込み済みバッファーを再生する関数（sound7~9などの個別呼び出し用）
         const playBufferSound = (buffer, speed = 1.0, volumeBoost = 2.0) => {
           if (!buffer) return;
           try {
@@ -215,7 +215,7 @@
           }
         };
 
-        // アイドル時のランダム音声再生関数（sound7, sound8, sound9 の音量を 0.4 に変更）
+        // アイドル時のランダム音声再生関数（sound7, sound8, sound9 は元の 0.4 のまま保持）
         const playRandomIdleSound = () => {
           const idleBuffers = [sound7Buffer, sound8Buffer, sound9Buffer].filter(b => b !== null);
           if (idleBuffers.length === 0) return;
@@ -271,7 +271,7 @@
         };
         initAudioBuffers();
 
-        // sound4.mp3 ループ再生関数
+        // sound4.mp3 ループ再生関数（音量を 0.5 -> 1.0 に変更）
         const playSound4Loop = () => {
           if (!sound4Buffer) return;
           initAudioContext();
@@ -285,7 +285,7 @@
           sound4Source.detune.value = 500;
 
           const gainNode = audioCtx.createGain();
-          gainNode.gain.value = 0.5;
+          gainNode.gain.value = 1.0; // 旧: 0.5 から変更
 
           const pannerNode = audioCtx.createPanner();
           pannerNode.panningModel = 'HRTF';
@@ -552,8 +552,9 @@
           activeAction = actionClip;
 
           const soundFile = Math.random() < 0.5 ? 'sound.mp3' : 'sound2.mp3';
-          playAmplifiedSound(soundFile, speed, 2.0);
-          playAmplifiedSound('sound3.mp3', speed, 2.0);
+          // volumeBoost を 4.0 に強化
+          playAmplifiedSound(soundFile, speed, 4.0);
+          playAmplifiedSound('sound3.mp3', speed, 4.0);
 
           if (actions2['idle2'] && actions2['action2']) {
             actions2['idle2'].stop();
