@@ -3,62 +3,88 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>リモコン（スマホA）</title>
-  <!-- PeerJS と QRコード生成ライブラリ -->
+  <title>リモコン (スマホA)</title>
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     body {
-      margin: 0; height: 100vh; display: flex; flex-direction: column;
-      justify-content: center; align-items: center; background: #121212; color: #fff;
+      margin: 0;
+      background: #111;
+      color: #fff;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      user-select: none;
     }
-    #qrcode { background: #fff; padding: 10px; border-radius: 10px; margin-bottom: 20px; }
-    .tap-area {
-      width: 80vw; height: 50vh; border-radius: 20px;
+    #status {
+      margin-bottom: 20px;
+      font-size: 18px;
+      color: #ff80ab;
+    }
+    #btn {
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      border: none;
       background: linear-gradient(135deg, #e91e63, #ff80ab);
-      display: flex; justify-content: center; align-items: center;
-      font-size: 24px; font-weight: bold; cursor: pointer; display: none;
+      color: white;
+      font-size: 24px;
+      font-weight: bold;
+      box-shadow: 0 0 20px rgba(233, 30, 99, 0.5);
+      cursor: pointer;
+    }
+    #btn:active {
+      transform: scale(0.95);
     }
   </style>
 </head>
 <body>
 
-  <div id="status">ID生成中...</div>
-  <div id="qrcode"></div>
-
-  <div class="tap-area" id="tapBtn">TAP TO ACTION</div>
+  <div id="status">接続中...</div>
+  <button id="btn" disabled>ACTION</button>
 
   <script>
-    // ランダムなIDでPeerを作成
+    const statusEl = document.getElementById('status');
+    const btn = document.getElementById('btn');
+
+    // PeerJSの初期化（ランダムなIDで作成）
     const peer = new Peer();
     let conn = null;
 
     peer.on('open', (id) => {
-      document.getElementById('status').textContent = 'メイン画面（スマホB）でこのQRコードを読み取ってください';
-      
-      // メイン画面を開くURL（例: index.html?peer=ID）をQRコード化
-      const connectUrl = location.href.replace('remote.html', 'index.html') + '?peer=' + id;
-      new QRCode(document.getElementById('qrcode'), {
-        text: connectUrl,
-        width: 180,
-        height: 180
+      statusEl.innerText = "スマホBに接続を試みています...";
+      // 固定ID「my-avatar-3d-target」を持つスマホBに接続
+      conn = peer.connect('my-avatar-3d-target');
+
+      conn.on('open', () => {
+        statusEl.innerText = "接続成功！タップで操作できます";
+        statusEl.style.color = "#4caf50";
+        btn.disabled = false;
+      });
+
+      conn.on('close', () => {
+        statusEl.innerText = "切断されました。再読み込みしてください。";
+        statusEl.style.color = "#f44336";
+        btn.disabled = true;
       });
     });
 
-    // メイン側（スマホB）からの直接接続を受け付ける
-    peer.on('connection', (c) => {
-      conn = c;
-      document.getElementById('status').textContent = '接続完了！画面をタップしてください';
-      document.getElementById('qrcode').style.display = 'none';
-      document.getElementById('tapBtn').style.display = 'flex';
+    peer.on('error', (err) => {
+      console.error(err);
+      statusEl.innerText = "接続エラー: スマホB(index.html)を先に開いてください";
     });
 
-    // タップ時にデータ送信
-    document.getElementById('tapBtn').addEventListener('pointerdown', (e) => {
-      e.preventDefault();
+    function sendTap() {
       if (conn && conn.open) {
-        conn.send('TRIGGER_ACTION');
+        conn.send('tap');
       }
+    }
+
+    btn.addEventListener('click', sendTap);
+    window.addEventListener('keydown', (e) => {
+      if (e.key === ' ' || e.key === 'Enter') sendTap();
     });
   </script>
 </body>
