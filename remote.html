@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>リモコン（スマホA）</title>
+  <!-- PeerJS と QRコード生成ライブラリ -->
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    body {
+      margin: 0; height: 100vh; display: flex; flex-direction: column;
+      justify-content: center; align-items: center; background: #121212; color: #fff;
+    }
+    #qrcode { background: #fff; padding: 10px; border-radius: 10px; margin-bottom: 20px; }
+    .tap-area {
+      width: 80vw; height: 50vh; border-radius: 20px;
+      background: linear-gradient(135deg, #e91e63, #ff80ab);
+      display: flex; justify-content: center; align-items: center;
+      font-size: 24px; font-weight: bold; cursor: pointer; display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="status">ID生成中...</div>
+  <div id="qrcode"></div>
+
+  <div class="tap-area" id="tapBtn">TAP TO ACTION</div>
+
+  <script>
+    // ランダムなIDでPeerを作成
+    const peer = new Peer();
+    let conn = null;
+
+    peer.on('open', (id) => {
+      document.getElementById('status').textContent = 'メイン画面（スマホB）でこのQRコードを読み取ってください';
+      
+      // メイン画面を開くURL（例: index.html?peer=ID）をQRコード化
+      const connectUrl = location.href.replace('remote.html', 'index.html') + '?peer=' + id;
+      new QRCode(document.getElementById('qrcode'), {
+        text: connectUrl,
+        width: 180,
+        height: 180
+      });
+    });
+
+    // メイン側（スマホB）からの直接接続を受け付ける
+    peer.on('connection', (c) => {
+      conn = c;
+      document.getElementById('status').textContent = '接続完了！画面をタップしてください';
+      document.getElementById('qrcode').style.display = 'none';
+      document.getElementById('tapBtn').style.display = 'flex';
+    });
+
+    // タップ時にデータ送信
+    document.getElementById('tapBtn').addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (conn && conn.open) {
+        conn.send('TRIGGER_ACTION');
+      }
+    });
+  </script>
+</body>
+</html>
