@@ -189,8 +189,8 @@
           }
         };
 
-        // 事前読み込み済みバッファーを再生する関数
-        const playBufferSound = (buffer, speed = 1.0, volumeBoost = 2.0) => {
+        // 事前読み込み済みバッファーを再生する関数（音量デフォルトを sound2 と同じ 4.0 に指定）
+        const playBufferSound = (buffer, speed = 1.0, volumeBoost = 4.0) => {
           if (!buffer) return;
           try {
             initAudioContext();
@@ -216,7 +216,7 @@
           }
         };
 
-        // アイドル時のランダム音声再生関数
+        // アイドル時のランダム音声再生関数（環境音のため音量を控えめの 0.4 に明示指定）
         const playRandomIdleSound = () => {
           const idleBuffers = [sound7Buffer, sound8Buffer, sound9Buffer].filter(b => b !== null);
           if (idleBuffers.length === 0) return;
@@ -266,7 +266,7 @@
               .then(decoded => { sound9Buffer = decoded; })
               .catch(err => console.log("sound9.mp3 読み込み失敗:", err));
 
-            // sound10.mp3 の事前読み込みを追加
+            // sound10.mp3 の事前読み込み
             fetch('sound10.mp3')
               .then(res => res.arrayBuffer())
               .then(buf => audioCtx.decodeAudioData(buf))
@@ -563,7 +563,7 @@
           playAmplifiedSound(soundFile, speed, 4.0);
           playAmplifiedSound('sound3.mp3', speed, 4.0);
 
-          // 5%の確率で sound10.mp3 を再生 (0.3 -> 0.05 に変更)
+          // 5%の確率で sound10.mp3 を再生 (sound2と同じく volumeBoost=4.0)
           if (Math.random() < 0.05) {
             playBufferSound(sound10Buffer, speed, 4.0);
           }
