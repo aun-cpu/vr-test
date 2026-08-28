@@ -757,6 +757,25 @@
           }
         };
 
+        // --- 別スマホからのリモート操作受信設定 ---
+        const setupRemoteSocket = () => {
+          // IPアドレスはご自身のサーバー環境に合わせて書き換えてください
+          const SERVER_URL = 'ws://YOUR_SERVER_IP:8080';
+          const socket = new WebSocket(SERVER_URL);
+
+          socket.addEventListener('message', (event) => {
+            if (event.data === 'TRIGGER_ACTION') {
+              console.log("リモートシグナル受信: アクション実行");
+              triggerAction();
+            }
+          });
+
+          socket.addEventListener('error', (err) => {
+            console.warn("WebSocket通信エラー:", err);
+          });
+        };
+        setupRemoteSocket();
+
         // 画面タップイベント
         window.addEventListener('click', () => {
           triggerAction();
