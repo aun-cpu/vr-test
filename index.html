@@ -563,8 +563,8 @@
           playAmplifiedSound(soundFile, speed, 4.0);
           playAmplifiedSound('sound3.mp3', speed, 4.0);
 
-          // 30%の確率で sound10.mp3 を再生
-          if (Math.random() < 0.3) {
+          // 5%の確率で sound10.mp3 を再生 (0.3 -> 0.05 に変更)
+          if (Math.random() < 0.05) {
             playBufferSound(sound10Buffer, speed, 4.0);
           }
 
