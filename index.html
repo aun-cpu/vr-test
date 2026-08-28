@@ -692,6 +692,7 @@
           });
         });
 
+        // 修正点 (B): avatar2 のモデル読み込み処理を avatar1 のリスナー外部へ独立配置
         avatar2El = document.getElementById('avatar2');
         if (avatar2El) {
           avatar2El.addEventListener('model-loaded', () => {
